@@ -19,6 +19,10 @@
     "noFallthroughCasesInSwitch": false,
     "baseUrl": "./",
     "paths": {
+      // 这里表示在使用 @nestjs/ 开头的库时映射到 src/@nestjs/ 目录下
+      // 这样配置之后在点击 @nestjs/ 开头的库时就会跳转到对应的目录下
+      // 但是在实际运行时使用 `ts-node ./src/main.ts` 还是会使用node_modules中的库
+      // 需要在package.json中配置运行参数 `ts-node -r tsconfig-paths/register ./src/main.ts`
       "@nestjs/*": ["src/@nestjs/*"]
     },
     "types": ["node"]
