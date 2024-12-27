@@ -7,7 +7,13 @@ import path from "node:path";
 export class NestApplication {
   private readonly app: Express = express();
   // module 就是入口模块类
-  constructor(protected readonly module: ClassConstructor) {}
+  constructor(protected readonly module: ClassConstructor) {
+    this.app.use(express.json());
+    this.app.use(express.urlencoded({ extended: true }));
+  }
+  use(middleware: any) {
+    this.app.use(middleware);
+  }
   // 初始化，配置路由
   async init() {
     // 1.读取模块管理的controllers元数据
@@ -30,13 +36,30 @@ export class NestApplication {
       for (const methodName of Object.getOwnPropertyNames(
         controllerPrototype
       )) {
-        const route =
-          Reflect.getMetadata("path", controllerPrototype[methodName]) || "";
         const requestMethod = Reflect.getMetadata(
           "method",
           controllerPrototype[methodName]
         );
         if (!requestMethod) continue;
+
+        const route =
+          Reflect.getMetadata("path", controllerPrototype[methodName]) || "";
+        const redirectUrl = Reflect.getMetadata(
+          "redirectUrl",
+          controllerPrototype[methodName]
+        );
+        const redirectStatusCode = Reflect.getMetadata(
+          "redirectStatusCode",
+          controllerPrototype[methodName]
+        );
+        const statusCode = Reflect.getMetadata(
+          "statusCode",
+          controllerPrototype[methodName]
+        );
+        const headers = Reflect.getMetadata(
+          "headers",
+          controllerPrototype[methodName]
+        );
 
         //配置路由
         const routePath = path.posix.join("/", prefix, route);
@@ -53,7 +76,31 @@ export class NestApplication {
             );
             // 调用控制器上的方法,得到结果
             const rest = controller[methodName](...args);
-            res.send(rest);
+            // 如果设置了状态码，就强制设置指定状态码
+            if (statusCode) {
+              res.status(statusCode);
+            }
+            // 判断是否要重定向
+            if (redirectUrl) {
+              if (rest && rest.url) {
+                return res.redirect(rest.statusCode || 302, rest.url);
+              }
+              return res.redirect(redirectStatusCode, redirectUrl);
+            }
+            // 判断是否有使用Response装饰器，如果有就不处理返回
+            const responseMetadata = this.getResponseMetadata(
+              controller,
+              methodName
+            );
+            // 如果有设置响应头
+            if (headers && headers.length) {
+              headers.forEach((item) => {
+                res.setHeader(item.key, item.value);
+              });
+            }
+            if (!responseMetadata || responseMetadata.data?.passThrough) {
+              res.send(rest);
+            }
           }
         );
 
@@ -67,6 +114,14 @@ export class NestApplication {
     }
     Logger.log(`Nest application successfully started`, "NestApplication");
   }
+  private getResponseMetadata(instance: any, methodName: string) {
+    const metadata = Reflect.getMetadata("params", instance, methodName);
+    return metadata?.find(
+      (item) =>
+        item &&
+        (item.key === "Response" || item.key === "Res" || item.key === "Next")
+    );
+  }
   /** 解析方法上需要使用的参数 */
   private resolveParams(
     instance: any,
@@ -79,18 +134,28 @@ export class NestApplication {
       Reflect.getMetadata("params", instance, methodName) || [];
     // 生序排列后根据key的类型来获取参数
     return paramsMetadata.map((param) => {
-      switch (param.key) {
+      const { key, data } = param;
+      switch (key) {
         case "Request":
         case "Req":
           return req;
-        case "Body":
-          return req.body;
         case "Query":
-          return req.query;
+          return data ? req.query[data] : req.query;
+        case "Session":
+          return data ? req.session[data] : req.session;
+        case "Body":
+          return data ? req.body[data] : req.body;
         case "Params":
-          return req.params;
+          return data ? req.params[data] : req.params;
         case "Headers":
-          return req.headers;
+          return data ? req.headers[data] : req.headers;
+        case "IP":
+          return req.ip;
+        case "Response":
+        case "Res":
+          return res;
+        case "Next":
+          return next;
       }
     });
   }
