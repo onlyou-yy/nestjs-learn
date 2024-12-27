@@ -78,23 +78,21 @@ export class NestApplication {
     const paramsMetadata =
       Reflect.getMetadata("params", instance, methodName) || [];
     // 生序排列后根据key的类型来获取参数
-    return paramsMetadata
-      .sort((a, b) => a.parameterIndex - b.parameterIndex)
-      .map((param) => {
-        switch (param.key) {
-          case "Request":
-          case "Req":
-            return req;
-          case "Body":
-            return req.body;
-          case "Query":
-            return req.query;
-          case "Params":
-            return req.params;
-          case "Headers":
-            return req.headers;
-        }
-      });
+    return paramsMetadata.map((param) => {
+      switch (param.key) {
+        case "Request":
+        case "Req":
+          return req;
+        case "Body":
+          return req.body;
+        case "Query":
+          return req.query;
+        case "Params":
+          return req.params;
+        case "Headers":
+          return req.headers;
+      }
+    });
   }
   async listen(port: number) {
     // 调用 express 的 listen 方法启动一个服务
