@@ -1,11 +1,7 @@
-import express, {
-  Express,
-  Request as ExpressRequest,
-  Response as ExpressResponse,
-  NextFunction,
-} from "express";
+import "reflect-metadata";
+import express, { Express, NextFunction } from "express";
 import { Logger } from "./logger";
-import { ClassConstructor } from "./types";
+import { ClassConstructor, ExpressRequest, ExpressResponse } from "./types";
 import path from "node:path";
 
 export class NestApplication {
@@ -47,8 +43,16 @@ export class NestApplication {
         this.app[requestMethod.toLowerCase()](
           routePath,
           (req: ExpressRequest, res: ExpressResponse, next: NextFunction) => {
+            // 处理参数
+            const args = this.resolveParams(
+              controller,
+              methodName,
+              req,
+              res,
+              next
+            );
             // 调用控制器上的方法,得到结果
-            const rest = controller[methodName](req, res, next);
+            const rest = controller[methodName](...args);
             res.send(rest);
           }
         );
@@ -60,9 +64,37 @@ export class NestApplication {
           "RouteResolver"
         );
       }
-
-      Logger.log(`Nest application successfully started`, "NestApplication");
     }
+    Logger.log(`Nest application successfully started`, "NestApplication");
+  }
+  /** 解析方法上需要使用的参数 */
+  private resolveParams(
+    instance: any,
+    methodName: string,
+    req: ExpressRequest,
+    res: ExpressResponse,
+    next: NextFunction
+  ) {
+    const paramsMetadata =
+      Reflect.getMetadata("params", instance, methodName) || [];
+    // 生序排列后根据key的类型来获取参数
+    return paramsMetadata
+      .sort((a, b) => a.parameterIndex - b.parameterIndex)
+      .map((param) => {
+        switch (param.key) {
+          case "Request":
+          case "Req":
+            return req;
+          case "Body":
+            return req.body;
+          case "Query":
+            return req.query;
+          case "Params":
+            return req.params;
+          case "Headers":
+            return req.headers;
+        }
+      });
   }
   async listen(port: number) {
     // 调用 express 的 listen 方法启动一个服务

@@ -1,3 +1,5 @@
+import "reflect-metadata";
+
 export function Get(path: string = ""): MethodDecorator {
   /**
    * target 类的原型
