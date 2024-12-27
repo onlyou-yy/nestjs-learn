@@ -1,7 +1,7 @@
 import "reflect-metadata";
 import { ClassConstructor } from "@nestjs/core/types";
 
-export const createParamDecorator = (key: string) => {
+export const createParamDecorator = (keyOrFactory: string | Function) => {
   // target 是控制器原型
   // propertyKey 是方法名
   // parameterIndex 是参数的索引
@@ -12,11 +12,21 @@ export const createParamDecorator = (key: string) => {
 
       const existingParams =
         Reflect.getMetadata(`params`, target, propertyKey) || [];
-      existingParams[parameterIndex] = {
-        parameterIndex,
-        key,
-        data,
-      };
+      if (keyOrFactory instanceof Function) {
+        existingParams[parameterIndex] = {
+          parameterIndex,
+          key: "DecoratorFactory",
+          data,
+          factory: keyOrFactory,
+        };
+      } else {
+        existingParams[parameterIndex] = {
+          parameterIndex,
+          key: keyOrFactory,
+          data,
+        };
+      }
+
       Reflect.defineMetadata(`params`, existingParams, target, propertyKey);
     };
 };

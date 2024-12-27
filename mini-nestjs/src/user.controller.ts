@@ -14,6 +14,7 @@ import {
 } from "@nestjs/common";
 import { ExpressRequest, ExpressResponse } from "@nestjs/core/types";
 import { NextFunction } from "express";
+import { User } from "./user.decorator";
 
 @Controller("user")
 export class UserController {
@@ -119,5 +120,9 @@ export class UserController {
   @Header("k1", "v1")
   handleResHeaders() {
     return `headers`;
+  }
+  @Get("reqUser")
+  handleReqUser(@User() user, @User("role") role) {
+    return `role:${role} JSON.stringify(user):${JSON.stringify(user)}`;
   }
 }

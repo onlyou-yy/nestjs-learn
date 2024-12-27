@@ -14,6 +14,10 @@ async function bootstrap() {
       },
     })
   );
+  app.use((req, res, next) => {
+    req.user = { name: "jack", role: "admin" };
+    next();
+  });
   await app.listen(3000);
 }
 

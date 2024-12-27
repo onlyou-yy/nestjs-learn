@@ -135,6 +135,14 @@ export class NestApplication {
     // 生序排列后根据key的类型来获取参数
     return paramsMetadata.map((param) => {
       const { key, data } = param;
+      // nestjs 上下文
+      const ctx = {
+        switchToHttp: () => ({
+          getRequest: () => req,
+          getResponse: () => res,
+          getNext: () => next,
+        }),
+      };
       switch (key) {
         case "Request":
         case "Req":
@@ -156,6 +164,8 @@ export class NestApplication {
           return res;
         case "Next":
           return next;
+        case "DecoratorFactory":
+          return param.factory(data, ctx);
       }
     });
   }
