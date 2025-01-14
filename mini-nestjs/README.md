@@ -65,3 +65,154 @@ function Decorator(value: any, context: ClassMethodDecoratorContext) {}
 ![alt text](./README/image.png)
 
 如果只想改项目中的 tsServer 的 sdk,可以在项目的根目录下创建一个`.vscode/settings.json`文件,在文件中添加`"typescript.tsdk": "./node_modules/typescript/lib"`即可.
+
+## IOC 和 DI
+
+IOC: 控制反转,是一种设计模式,它的核心思想是将对象的创建和依赖关系的管理交给容器,而不是在代码中直接创建对象.
+
+DI: 依赖注入,是一种实现 IOC 的方式,它的核心思想是将对象的依赖关系从代码中解耦出来,由容器来负责创建和管理对象的依赖关系,程序不再主动创建对象,而是被动的接受容器注入的对象
+
+传统的方式
+
+```ts
+class Engine {
+  start() {
+    console.log("引擎启动");
+  }
+}
+class Car {
+  private engine: Engine;
+  constructor() {
+    this.engine = new Engine();
+  }
+  drive() {
+    this.engine.start();
+  }
+}
+
+const car = new Car();
+car.drive();
+```
+
+IOC 的方式
+
+```ts
+class Engine {
+  start() {
+    console.log("引擎启动");
+  }
+}
+class Car {
+  private engine: Engine;
+  constructor(engine: Engine) {
+    this.engine = engine;
+  }
+  drive() {
+    this.engine.start();
+  }
+}
+const engine = new Engine();
+const car = new Car(engine);
+car.drive();
+```
+
+通过 DI 方式实现 IOC
+
+```ts
+import "reflect-metadata";
+
+// 定义一个装饰器,用来标记类
+function Injectable(target: any) {
+  // 这里面可以不用写任何代码，此装饰器不需要执行任何操作，仅仅用于元数据的生成
+  // 只要使用了这个装饰器 reflect-metadata 就会存储一些信息，包括
+  // 类型元数据使用元数据键"design:type"。
+  // 参数类型元数据使用元数据键"design:paramtypes"。
+  // 返回类型元数据使用元数据键"design:returntype"。
+  // https://zhuanlan.zhihu.com/p/42220487
+}
+
+@Injectable
+class Oil {
+  constructor(public price: number) {}
+}
+
+@Injectable
+class Engine {
+  constructor(private oil: Oil, private power: number) {}
+  start() {
+    console.log("引擎启动");
+  }
+}
+
+@Injectable
+class Car {
+  constructor(private engine: Engine) {}
+  drive() {
+    this.engine.start();
+  }
+}
+
+// 定义一个 DI 容器,用来管理对象的依赖关系
+class DIContainer {
+  private services = new Map<string, any>();
+  // 注册服务,用来保存依赖
+  register<T>(name: string, service: any) {
+    this.services.set(name, service);
+  }
+  // 解析服务,取出服务
+  resolve<T>(name: string): T {
+    const Service = this.services.get(name);
+    if (!Service) {
+      throw new Error(`Service ${name} not found`);
+    }
+    if (Service instanceof Function) {
+      // 是一个类
+      // 获取实现类的构造函数参数的类型数组
+      // 通过 @Injectable() 装饰器注入的依赖
+      const dependencies =
+        Reflect.getMetadata("design:paramtypes", Service) ?? []; // [Engine]
+      // 递归解析依赖
+      const injections = dependencies.map((dependency: any) =>
+        this.resolve(dependency.name)
+      );
+      // 创建服务实例
+      return new Service(...injections);
+    } else if (Service.useFactory) {
+      // 是一个类的工厂方法
+      const params = Service.inject || [];
+      return Service.useFactory(...params);
+    } else if (Service.useValue) {
+      // 是一个类的实例
+      return Service.useValue;
+    }
+  }
+}
+
+// 创建 DI 容器
+const container = new DIContainer();
+// 当类的构造方法除了需要注入的依赖之外,还需要其他的参数时,可以使用 useFactory 方法 和 useValue 方法
+container.register<Oil>("Oil", {
+  provide: "Oil",
+  inject: [100],
+  useFactory: (price: number) => {
+    return new Oil(price);
+  },
+});
+container.register<Engine>("Engine", {
+  provide: "Engine",
+  useValue: new Engine(new Oil(200), 180),
+});
+container.register<Car>("Car", Car);
+const car = container.resolve<Car>("Car");
+car.drive();
+```
+
+## SOLID 原则
+
+SOLID 原则是面向对象编程中的五个基本原则,它们分别是:
+
+- 单一职责原则(SRP): 一个类应该只有一个引起它变化的原因.
+- 开放封闭原则(OCP): 一个类应该对扩展开放,对修改封闭.
+- 里氏替换原则(LSP): 子类应该能够替换它们的基类(IS-A).
+- 接口隔离原则(ISP): 一个类不应该依赖它不需要的接口.
+- 依赖倒置原则(DIP): 高层模块不应该依赖低层模块,两者都应该依赖抽象.
