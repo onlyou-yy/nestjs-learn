@@ -2,7 +2,7 @@ import "reflect-metadata";
 import { ClassConstructor } from "@nestjs/core/types";
 
 export const createParamDecorator = (keyOrFactory: string | Function) => {
-  // target 是控制器原型
+  // target 当装饰的是构造函数的参数时target是类本身,当装饰器装饰的是方法的参数时target是控制器原型
   // propertyKey 是方法名
   // parameterIndex 是参数的索引
   return (data?: any) =>

@@ -3,16 +3,49 @@ import express, { Express, NextFunction } from "express";
 import { Logger } from "./logger";
 import { ClassConstructor, ExpressRequest, ExpressResponse } from "./types";
 import path from "node:path";
+import { DESIGN_PARAM_TYPES, INJECTED_TOKENS } from "@nestjs/common/constants";
 
 export class NestApplication {
   private readonly app: Express = express();
+  // 保存全部的 providers
+  private readonly providers = new Map();
   // module 就是入口模块类
   constructor(protected readonly module: ClassConstructor) {
     this.app.use(express.json());
     this.app.use(express.urlencoded({ extended: true }));
+    this.initProviders();
   }
   use(middleware: any) {
     this.app.use(middleware);
+  }
+  // 初始化 providers
+  initProviders() {
+    // 从 @Module 装饰的类上取出 providers 元数据
+    const providers = Reflect.getMetadata("providers", this.module) || [];
+
+    for (let provider of providers) {
+      if (provider.provide && provider.useClass) {
+        // 解析出类上的依赖
+        const dependencies = this.resolveDependencies(provider.useClass);
+        // provide 是一个类
+        const classInstance = new provider.useClass(...dependencies); // TODO 这里的类可以会有其他依赖
+        // 把依赖的实例存到容器中
+        this.providers.set(provider.provide, classInstance);
+      } else if (provider.provide && provider.useValue) {
+        // provide 是一个实例
+        this.providers.set(provider.provide, provider.useValue);
+      } else if (provider.provide && provider.useFactory) {
+        const inject = provider.inject || [];
+        const depts = inject.map((item) => this.getProviderByToken(item));
+        // provide 是一个工厂函数
+        this.providers.set(provider.provide, provider.useFactory(...depts)); // TODO 这里的类可以会有其他依赖
+      } else if (provider instanceof Function) {
+        // provider 就是一个类
+        this.providers.set(provider, new provider());
+      } else {
+        throw new Error("provider is not valid");
+      }
+    }
   }
   // 初始化，配置路由
   async init() {
@@ -26,8 +59,11 @@ export class NestApplication {
 
     // 2.读取控制器上的路由元数据，然后配置路由
     for (let Controller of controllers) {
+      // 解析出控制器上的依赖
+      const dependencies = this.resolveDependencies(Controller);
+
       // 创建控制器实例
-      const controller = new Controller();
+      const controller = new Controller(...dependencies);
       const prefix = Reflect.getMetadata("prefix", Controller) || "/";
       Logger.log(`${Controller.name} {${prefix}}`, "RouteResolver");
 
@@ -121,6 +157,24 @@ export class NestApplication {
         item &&
         (item.key === "Response" || item.key === "Res" || item.key === "Next")
     );
+  }
+  /** 把token转成provider */
+  getProviderByToken(token: string) {
+    return this.providers.get(token) ?? token;
+  }
+  /** 解析控制器上需要使用的依赖 */
+  private resolveDependencies(classes: ClassConstructor) {
+    // 读取类构造器上通过 @Inject 装饰器注入的依赖的Token
+    const injectedTokens = Reflect.getMetadata(INJECTED_TOKENS, classes) || [];
+    // 读取类构造器上参数的类型
+    const constructorParams =
+      Reflect.getMetadata(DESIGN_PARAM_TYPES, classes) || [];
+
+    // 遍历依赖的Token，然后根据Token从容器中获取对应的实例
+    return constructorParams.map((token, index) => {
+      //TODO 将每个param中的token默认换成对应的 provider 值
+      return this.getProviderByToken(injectedTokens[index] ?? token);
+    });
   }
   /** 解析方法上需要使用的参数 */
   private resolveParams(
