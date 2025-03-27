@@ -20,31 +20,47 @@ export class NestApplication {
   }
   // 初始化 providers
   initProviders() {
-    // 从 @Module 装饰的类上取出 providers 元数据
-    const providers = Reflect.getMetadata("providers", this.module) || [];
-
-    for (let provider of providers) {
-      if (provider.provide && provider.useClass) {
-        // 解析出类上的依赖
-        const dependencies = this.resolveDependencies(provider.useClass);
-        // provide 是一个类
-        const classInstance = new provider.useClass(...dependencies); // TODO 这里的类可以会有其他依赖
-        // 把依赖的实例存到容器中
-        this.providers.set(provider.provide, classInstance);
-      } else if (provider.provide && provider.useValue) {
-        // provide 是一个实例
-        this.providers.set(provider.provide, provider.useValue);
-      } else if (provider.provide && provider.useFactory) {
-        const inject = provider.inject || [];
-        const depts = inject.map((item) => this.getProviderByToken(item));
-        // provide 是一个工厂函数
-        this.providers.set(provider.provide, provider.useFactory(...depts)); // TODO 这里的类可以会有其他依赖
-      } else if (provider instanceof Function) {
-        // provider 就是一个类
-        this.providers.set(provider, new provider());
-      } else {
-        throw new Error("provider is not valid");
+    // 重写注册providers的流程
+    // 获取导入的模块，并手机导入模块的 providers
+    const imports = Reflect.getMetadata("imports", this.module) ?? [];
+    for (let importModule of imports) {
+      const importedProviders =
+        Reflect.getMetadata("providers", importModule) ?? [];
+      for (const provider of importedProviders) {
+        this.addProvider(provider);
       }
+    }
+    // 收集自身模块的providers
+    const providers = Reflect.getMetadata("providers", this.module) || [];
+    for (const provider of providers) {
+      this.addProvider(provider);
+    }
+  }
+  addProvider(provider: any) {
+    // 处理循环依赖的情况，已经收集过的就不再进行收集
+    const injectToken = provider.provide ?? provider;
+    if (this.providers.has(injectToken)) return;
+    if (provider.provide && provider.useClass) {
+      // 解析出类上的依赖
+      const dependencies = this.resolveDependencies(provider.useClass);
+      // provide 是一个类
+      const classInstance = new provider.useClass(...dependencies); // TODO 这里的类可以会有其他依赖
+      // 把依赖的实例存到容器中
+      this.providers.set(provider.provide, classInstance);
+    } else if (provider.provide && provider.useValue) {
+      // provide 是一个实例
+      this.providers.set(provider.provide, provider.useValue);
+    } else if (provider.provide && provider.useFactory) {
+      const inject = provider.inject || [];
+      const depts = inject.map((item) => this.getProviderByToken(item));
+      // provide 是一个工厂函数
+      this.providers.set(provider.provide, provider.useFactory(...depts)); // TODO 这里的类可以会有其他依赖
+    } else if (provider instanceof Function) {
+      // provider 就是一个类
+      const dependencies = this.resolveDependencies(provider);
+      this.providers.set(provider, new provider(...dependencies));
+    } else {
+      throw new Error("provider is not valid");
     }
   }
   // 初始化，配置路由

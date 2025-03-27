@@ -1,3 +1,5 @@
+[Nest 体系课](https://www.bilibili.com/video/BV1VYs8eFEjh?spm_id_from=333.788.player.switch&vd_source=41ed998ac767425fb616fd9071ce9682&p=15)
+
 ## 装饰器
 
 ts 的装饰在不同版本的 typescript 上写法会有所不同,因为,ts 的装饰器是一个实验性的特性,一般一个特性要正式实装,需要经过五个阶段,分别是 设想(stage0),提案(stage1),草案(stage2),候选(stage3),完成.
@@ -205,6 +207,24 @@ container.register<Engine>("Engine", {
 container.register<Car>("Car", Car);
 const car = container.resolve<Car>("Car");
 car.drive();
+```
+
+**`reflect-metadata`的`defineMetadata`基本原理**
+
+```js
+// 在全局中维护一个存储区域
+const metadataMap = new Map();
+function defineMetadata(key, value, target, propertyKey) {
+  if (!metadataMap.get(target)) {
+    metadataMap.set(target, new Map());
+  }
+  const targetMetadata = metadataMap.get(target);
+  if (!targetMetadata.get(propertyKey)) {
+    targetMetadata.set(propertyKey, new Map());
+  }
+  const propertyMetadata = targetMetadata.get(propertyKey);
+  propertyMetadata.set(key, value);
+}
 ```
 
 ## SOLID 原则
