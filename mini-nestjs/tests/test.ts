@@ -1,4 +1,6 @@
 import "reflect-metadata";
+import { CommonService } from "src/common.service";
+import { OtherService } from "src/other.service";
 
 // 定义一个装饰器,用来标记类
 function Injectable(target: any) {
@@ -83,3 +85,7 @@ container.register<Engine>("Engine", {
 container.register<Car>("Car", Car);
 const car = container.resolve<Car>("Car");
 car.drive();
+
+console.log(Reflect.getMetadata("design:paramtypes", CommonService));
+// 循环引用会导致获取不到正确值，获取到的是[undefined]
+console.log(Reflect.getMetadata("design:paramtypes", OtherService));
