@@ -20,25 +20,28 @@ export class NestApplication {
   constructor(protected readonly module: ClassConstructor) {
     this.app.use(express.json());
     this.app.use(express.urlencoded({ extended: true }));
-    this.initProviders();
   }
   use(middleware: any) {
     this.app.use(middleware);
   }
   // 初始化 providers
-  initProviders() {
+  async initProviders() {
     // 重写注册providers的流程
     // 获取导入的模块，并手机导入模块的 providers
     const imports = Reflect.getMetadata("imports", this.module) ?? [];
     for (let importModule of imports) {
-      if ("module" in importModule) {
+      let importedModule = importModule;
+      if (importModule instanceof Promise) {
+        importedModule = await importModule;
+      }
+      if ("module" in importedModule) {
         // 如果是动态模块,合并配置项
         const {
           module,
           providers = [],
           exports = [],
           controllers = [],
-        } = importModule;
+        } = importedModule;
         const oldProviders = Reflect.getMetadata("providers", module) ?? [];
         const newProviders = [...oldProviders, ...providers];
         // 关联到模块
@@ -56,7 +59,7 @@ export class NestApplication {
         Reflect.defineMetadata("exports", newExports, module);
         this.registerProvidersFromModule(module, this.module);
       } else {
-        this.registerProvidersFromModule(importModule, this.module);
+        this.registerProvidersFromModule(importedModule, this.module);
       }
     }
     // 收集自身模块的providers
@@ -330,6 +333,7 @@ export class NestApplication {
     });
   }
   async listen(port: number) {
+    await this.initProviders();
     // 调用 express 的 listen 方法启动一个服务
     await this.init();
     this.app.listen(port, () => {

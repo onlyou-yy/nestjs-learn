@@ -8,7 +8,7 @@ import { AppService } from "./app.service";
 @Module({
   controllers: [AppController, UserController],
   // 导入模块
-  imports: [LoggerModule, CoreModule, DynamicConfigModule.forRoot()],
+  imports: [LoggerModule, CoreModule, DynamicConfigModule.forRoot("456")],
   providers: [AppService],
   exports: [AppService],
 })

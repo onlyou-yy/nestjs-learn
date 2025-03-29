@@ -3,7 +3,7 @@ import "reflect-metadata";
 interface IModuleMetadata {
   controllers?: Function[];
   providers?: any[];
-  imports?: (Function | DynamicModule)[];
+  imports?: (Function | DynamicModule | Promise<DynamicModule>)[];
   exports?: any[];
 }
 
