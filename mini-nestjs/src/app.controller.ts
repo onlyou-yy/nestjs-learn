@@ -7,6 +7,7 @@ import {
 } from "./logger.service";
 import { CommonService } from "./common.service";
 import { OtherService } from "./other.service";
+import { AppService } from "./app.service";
 
 @Controller()
 export class AppController {
@@ -15,6 +16,7 @@ export class AppController {
     private loggerService: LoggerService,
     private commonService: CommonService,
     private otherService: OtherService,
+    private appService: AppService,
     @Inject("UserLog") private userLog: UserLoggerService,
     @Inject("FactoryLog") private factoryLog: FactoryService
   ) {}
@@ -38,5 +40,11 @@ export class AppController {
   other() {
     this.otherService.log("hello");
     return "other";
+  }
+
+  @Get("config")
+  config() {
+    console.log(this.appService.getConfig());
+    return this.appService.getConfig();
   }
 }

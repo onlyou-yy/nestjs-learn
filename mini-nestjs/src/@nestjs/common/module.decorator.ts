@@ -3,8 +3,12 @@ import "reflect-metadata";
 interface IModuleMetadata {
   controllers?: Function[];
   providers?: any[];
-  imports?: Function[];
+  imports?: (Function | DynamicModule)[];
   exports?: any[];
+}
+
+export interface DynamicModule extends IModuleMetadata {
+  module: Function;
 }
 
 // ClassDecorator 类装饰器

@@ -4,6 +4,7 @@ import { Logger } from "./logger";
 import { ClassConstructor, ExpressRequest, ExpressResponse } from "./types";
 import path, { relative } from "node:path";
 import { DESIGN_PARAM_TYPES, INJECTED_TOKENS } from "@nestjs/common/constants";
+import { defineModule } from "@nestjs/common";
 
 export class NestApplication {
   private readonly app: Express = express();
@@ -30,7 +31,33 @@ export class NestApplication {
     // 获取导入的模块，并手机导入模块的 providers
     const imports = Reflect.getMetadata("imports", this.module) ?? [];
     for (let importModule of imports) {
-      this.registerProvidersFromModule(importModule);
+      if ("module" in importModule) {
+        // 如果是动态模块,合并配置项
+        const {
+          module,
+          providers = [],
+          exports = [],
+          controllers = [],
+        } = importModule;
+        const oldProviders = Reflect.getMetadata("providers", module) ?? [];
+        const newProviders = [...oldProviders, ...providers];
+        // 关联到模块
+        defineModule(module, newProviders);
+        // 覆盖module上原来的 providers 和 exports
+        Reflect.defineMetadata("providers", newProviders, module);
+
+        const oldControllers = Reflect.getMetadata("controllers", module) ?? [];
+        const newControllers = [...oldControllers, ...controllers];
+        defineModule(module, newControllers);
+        Reflect.defineMetadata("controllers", newControllers, module);
+
+        const oldExports = Reflect.getMetadata("exports", module) ?? [];
+        const newExports = [...oldExports, ...exports];
+        Reflect.defineMetadata("exports", newExports, module);
+        this.registerProvidersFromModule(module, this.module);
+      } else {
+        this.registerProvidersFromModule(importModule, this.module);
+      }
     }
     // 收集自身模块的providers
     const providers = Reflect.getMetadata("providers", this.module) || [];
