@@ -24,6 +24,8 @@ export class NestApplication implements MiddlewareConsumer {
   private readonly globalProviders = new Set();
   // 记录所有的中间件
   private readonly middlewares = [];
+  // 记录中间件要排除的路径
+  private readonly excludeRoutes = [];
   // module 就是入口模块类
   constructor(protected readonly module: ClassConstructor) {
     this.app.use(express.json());
@@ -56,6 +58,10 @@ export class NestApplication implements MiddlewareConsumer {
       const { routePath, routeMethod } = this.normalizeRouteInfo(route);
       for (const middleware of this.middlewares) {
         this.app.use(routePath, (req, res, next) => {
+          // 排除路径
+          if (this.isExcluded(req.originalUrl, req.method)) {
+            return next();
+          }
           // 如果配置的方法名是All，或者方法名完全匹配
           if (routeMethod === RequestMethod.ALL || routeMethod === req.method) {
             const ins = this.getMiddlewareInstance(middleware);
@@ -66,6 +72,21 @@ export class NestApplication implements MiddlewareConsumer {
         });
       }
     }
+    return this;
+  }
+  exclude(
+    ...routes: Array<string | { path: string; method: RequestMethod }>
+  ): this {
+    this.excludeRoutes.push(...routes.map(this.normalizeRouteInfo));
+    return this;
+  }
+  isExcluded(reqPath: string, method: RequestMethod | string) {
+    return this.excludeRoutes.some(
+      (route) =>
+        route.routePath === reqPath &&
+        (route.routeMethod === RequestMethod.ALL ||
+          route.routeMethod === method)
+    );
   }
   /** 获取中间件实例 */
   getMiddlewareInstance(middleware) {
@@ -77,15 +98,18 @@ export class NestApplication implements MiddlewareConsumer {
   }
   /** 把 route 格式化成标准对象 */
   private normalizeRouteInfo(
-    route: string | { path: string; method: RequestMethod }
+    route: string | { path: string; method: RequestMethod } | Function
   ) {
     let routePath = "";
     let routeMethod = RequestMethod.ALL;
     if (typeof route === "string") {
       routePath = route;
-    } else {
+    } else if ("path" in route) {
       routePath = route.path;
       routeMethod = route.method ?? RequestMethod.ALL;
+    } else if (route instanceof Function) {
+      // route 是一个控制器
+      routePath = Reflect.getMetadata("prefix", route);
     }
     // cats => /cats
     routePath = path.posix.join("/", routePath);

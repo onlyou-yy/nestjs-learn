@@ -16,3 +16,9 @@ GET http://localhost:3000/config
 
 ###
 GET http://localhost:3000/middle
+
+###
+GET http://localhost:3000/user/req
+
+###
+GET http://localhost:3000/user/query

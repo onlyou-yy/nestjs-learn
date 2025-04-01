@@ -12,6 +12,12 @@ export interface MiddlewareConsumer {
   ): this;
   /**  指定哪些路由要使用这些中间件 */
   forRoutes(
+    ...routes: Array<
+      string | { path: string; method: RequestMethod } | Function
+    >
+  ): this;
+  /**  排除路由 */
+  exclude(
     ...routes: Array<string | { path: string; method: RequestMethod }>
-  ): void;
+  ): this;
 }
