@@ -11,6 +11,7 @@ import { CoreModule } from "./core.module";
 import { DynamicConfigModule } from "./dynamicConfig.module";
 import { AppService } from "./app.service";
 import { LoggerMiddleware } from "./logger.middleware";
+import { loggerFunction } from "./logger-function.middleware";
 @Module({
   controllers: [AppController, UserController],
   // 导入模块
@@ -22,7 +23,8 @@ export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     // 针对 GET /middle 路由应用logger中间键
     consumer
-      .apply(LoggerMiddleware)
+      // .apply(LoggerMiddleware)
+      .apply(loggerFunction)
       // .forRoutes("middle");
       .forRoutes(
         { path: "middle", method: RequestMethod.GET },

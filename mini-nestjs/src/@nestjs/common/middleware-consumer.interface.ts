@@ -7,7 +7,7 @@ export interface MiddlewareConsumer {
   /**  应用中间件，可以有多个 */
   apply(
     ...middlewares: Array<
-      ClassImplementingInterface<NestMiddleware> | NestMiddleware
+      ClassImplementingInterface<NestMiddleware> | NestMiddleware | Function
     >
   ): this;
   /**  指定哪些路由要使用这些中间件 */

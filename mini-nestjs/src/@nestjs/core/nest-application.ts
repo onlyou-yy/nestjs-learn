@@ -22,7 +22,7 @@ export class NestApplication implements MiddlewareConsumer {
   private readonly moduleProviders = new Map();
   // 保存全局的 provider
   private readonly globalProviders = new Set();
-  // 记录所有的中间件
+  // 记录所有的中间件,可能是类、函数、实例
   private readonly middlewares = [];
   // 记录中间件要排除的路径
   private readonly excludeRoutes = [];
@@ -64,8 +64,14 @@ export class NestApplication implements MiddlewareConsumer {
           }
           // 如果配置的方法名是All，或者方法名完全匹配
           if (routeMethod === RequestMethod.ALL || routeMethod === req.method) {
-            const ins = this.getMiddlewareInstance(middleware);
-            ins.use(req, res, next);
+            if ("use" in middleware.prototype || "use" in middleware) {
+              const ins = this.getMiddlewareInstance(middleware);
+              ins.use(req, res, next);
+            } else if (middleware instanceof Function) {
+              middleware(req, res, next);
+            } else {
+              next();
+            }
           } else {
             next();
           }
