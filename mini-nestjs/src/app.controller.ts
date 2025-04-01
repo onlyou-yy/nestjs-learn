@@ -47,4 +47,9 @@ export class AppController {
     console.log(this.appService.getConfig());
     return this.appService.getConfig();
   }
+
+  @Get("middle")
+  middle() {
+    return "middle";
+  }
 }

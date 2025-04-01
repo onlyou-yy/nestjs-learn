@@ -4,9 +4,15 @@ import { Logger } from "./logger";
 import { ClassConstructor, ExpressRequest, ExpressResponse } from "./types";
 import path, { relative } from "node:path";
 import { DESIGN_PARAM_TYPES, INJECTED_TOKENS } from "@nestjs/common/constants";
-import { defineModule } from "@nestjs/common";
+import {
+  ClassImplementingInterface,
+  defineModule,
+  MiddlewareConsumer,
+  RequestMethod,
+} from "@nestjs/common";
+import { NestMiddleware } from "@nestjs/common";
 
-export class NestApplication {
+export class NestApplication implements MiddlewareConsumer {
   private readonly app: Express = express();
   // 保存全部的 providers
   // private readonly providers = new Map();
@@ -16,15 +22,79 @@ export class NestApplication {
   private readonly moduleProviders = new Map();
   // 保存全局的 provider
   private readonly globalProviders = new Set();
+  // 记录所有的中间件
+  private readonly middlewares = [];
   // module 就是入口模块类
   constructor(protected readonly module: ClassConstructor) {
     this.app.use(express.json());
     this.app.use(express.urlencoded({ extended: true }));
+    this.initMiddleware();
   }
   use(middleware: any) {
     this.app.use(middleware);
   }
-  // 初始化 providers
+  /**
+   * 初始化中间件
+   */
+  initMiddleware() {
+    this.module.prototype.configure?.(this);
+  }
+  apply(
+    ...middlewares: Array<
+      ClassImplementingInterface<NestMiddleware> | NestMiddleware
+    >
+  ) {
+    this.middlewares.push(...middlewares);
+    return this;
+  }
+  forRoutes(
+    ...routes: Array<string | { path: string; method: RequestMethod }>
+  ) {
+    for (const route of routes) {
+      // 把 route 格式化成标准对象
+      const { routePath, routeMethod } = this.normalizeRouteInfo(route);
+      for (const middleware of this.middlewares) {
+        this.app.use(routePath, (req, res, next) => {
+          // 如果配置的方法名是All，或者方法名完全匹配
+          if (routeMethod === RequestMethod.ALL || routeMethod === req.method) {
+            const ins = this.getMiddlewareInstance(middleware);
+            ins.use(req, res, next);
+          } else {
+            next();
+          }
+        });
+      }
+    }
+  }
+  /** 获取中间件实例 */
+  getMiddlewareInstance(middleware) {
+    if (middleware instanceof Function) {
+      return new middleware();
+    }
+    return middleware;
+  }
+  /** 把 route 格式化成标准对象 */
+  private normalizeRouteInfo(
+    route: string | { path: string; method: RequestMethod }
+  ) {
+    let routePath = "";
+    let routeMethod = RequestMethod.ALL;
+    if (typeof route === "string") {
+      routePath = route;
+    } else {
+      routePath = route.path;
+      routeMethod = route.method ?? RequestMethod.ALL;
+    }
+    // cats => /cats
+    routePath = path.posix.join("/", routePath);
+    return {
+      routePath,
+      routeMethod,
+    };
+  }
+  /**
+   * 初始化 providers
+   */
   async initProviders() {
     // 重写注册providers的流程
     // 获取导入的模块，并手机导入模块的 providers
@@ -69,6 +139,7 @@ export class NestApplication {
       this.addProvider(provider, this.module, isGlobal);
     }
   }
+  /** 从 module 中提取 provider 并进行注册 */
   registerProvidersFromModule(module, ...parentModules) {
     const isGlobal = Reflect.getMetadata("global", module);
     // 获取导出的模块，不过可能没有全部导出，需要使用 exports 进行过滤

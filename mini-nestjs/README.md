@@ -1,4 +1,4 @@
-[Nest 体系课](https://www.bilibili.com/video/BV1VYs8eFEjh?spm_id_from=333.788.player.switch&vd_source=41ed998ac767425fb616fd9071ce9682&p=15)
+[Nest 体系课](https://www.bilibili.com/video/BV1UMw5eDEya?spm_id_from=333.788.videopod.episodes&vd_source=41ed998ac767425fb616fd9071ce9682&p=18)
 
 ## 装饰器
 
@@ -240,3 +240,7 @@ SOLID 原则是面向对象编程中的五个基本原则,它们分别是:
 ## Provider
 
 nestjs 中的 Provider 就是通过 IOC 和 DI 实现的.
+
+## 中间件
+
+中间件是在路由处理程序之前调用的函数。中间件函数可以访问 request 和 response 对象，以及应用请求-响应周期中的 next() 中间件函数。下一个中间件函数通常由名为 next 的变量表示。
