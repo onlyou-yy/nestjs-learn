@@ -28,7 +28,6 @@ export class NestApplication implements MiddlewareConsumer {
   constructor(protected readonly module: ClassConstructor) {
     this.app.use(express.json());
     this.app.use(express.urlencoded({ extended: true }));
-    this.initMiddleware();
   }
   use(middleware: any) {
     this.app.use(middleware);
@@ -44,6 +43,8 @@ export class NestApplication implements MiddlewareConsumer {
       ClassImplementingInterface<NestMiddleware> | NestMiddleware
     >
   ) {
+    // 将中间件添加到模块中，方便后续解析依赖获取provider
+    defineModule(this.module, middlewares);
     this.middlewares.push(...middlewares);
     return this;
   }
@@ -69,7 +70,8 @@ export class NestApplication implements MiddlewareConsumer {
   /** 获取中间件实例 */
   getMiddlewareInstance(middleware) {
     if (middleware instanceof Function) {
-      return new middleware();
+      const dependencies = this.resolveDependencies(middleware);
+      return new middleware(...dependencies);
     }
     return middleware;
   }
@@ -405,6 +407,7 @@ export class NestApplication implements MiddlewareConsumer {
   }
   async listen(port: number) {
     await this.initProviders();
+    await this.initMiddleware();
     // 调用 express 的 listen 方法启动一个服务
     await this.init();
     this.app.listen(port, () => {
