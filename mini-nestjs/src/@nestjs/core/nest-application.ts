@@ -35,6 +35,7 @@ export class NestApplication implements MiddlewareConsumer {
   constructor(protected readonly module: ClassConstructor) {
     this.app.use(express.json());
     this.app.use(express.urlencoded({ extended: true }));
+    defineModule(this.module, [this.defaultGlobalHttpExceptionFilter]);
   }
   use(middleware: any) {
     this.app.use(middleware);
@@ -43,6 +44,7 @@ export class NestApplication implements MiddlewareConsumer {
    * 注册全局过滤器
    */
   useGlobalFilters(...filters) {
+    defineModule(this.module, filters);
     this.globalHttpExceptionFilters.push(...filters);
   }
   /**
