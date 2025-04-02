@@ -226,7 +226,7 @@ export class NestApplication implements MiddlewareConsumer {
       ? this.globalProviders
       : this.moduleProviders.get(module) || new Set();
 
-    if (!this.moduleProviders.get(module)) {
+    if (!isGlobal && !this.moduleProviders.get(module)) {
       this.moduleProviders.set(module, providers);
     }
     // 处理循环依赖的情况，已经收集过的就不再进行收集
