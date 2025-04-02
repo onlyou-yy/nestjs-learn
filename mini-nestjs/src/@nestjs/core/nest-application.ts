@@ -92,6 +92,7 @@ export class NestApplication implements MiddlewareConsumer {
         });
       }
     }
+    this.middlewares.length = 0;
     return this;
   }
   exclude(

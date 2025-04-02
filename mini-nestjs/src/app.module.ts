@@ -31,13 +31,10 @@ export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     // 针对 GET /middle 路由应用logger中间键
     consumer
-      // .apply(LoggerMiddleware)
+      .apply(LoggerMiddleware)
+      .forRoutes("middle")
       .apply(loggerFunction)
-      // .forRoutes("middle");
-      .forRoutes(
-        { path: "middle", method: RequestMethod.GET },
-        { path: "user", method: RequestMethod.GET }
-      )
+      .forRoutes({ path: "user", method: RequestMethod.GET })
       .exclude({ path: "user/query", method: RequestMethod.GET });
   }
 }
