@@ -1,6 +1,7 @@
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
 import session from "express-session";
+import { CustomExceptionFilterUseClass } from "./custom-exception.filter";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -18,6 +19,7 @@ async function bootstrap() {
     req.user = { name: "jack", role: "admin" };
     next();
   });
+  app.useGlobalFilters(new CustomExceptionFilterUseClass());
   await app.listen(3000);
 }
 

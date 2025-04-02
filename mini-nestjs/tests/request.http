@@ -22,3 +22,23 @@ GET http://localhost:3000/user/req
 
 ###
 GET http://localhost:3000/user/query
+
+###
+GET http://localhost:3000/exception
+
+
+###
+GET http://localhost:3000/forbiddenException
+
+### 测试自定义控制器异常捕获
+GET http://localhost:3000/customException1
+
+### 测试自定义方法异常捕获 注册的是实例
+GET http://localhost:3000/customException2
+
+### 测试自定义方法异常捕获  注册的是类
+GET http://localhost:3000/customException3
+
+### 测试自定义控制器异常捕获
+GET http://localhost:3000/customException4
+

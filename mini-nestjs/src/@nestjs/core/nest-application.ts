@@ -10,7 +10,7 @@ import {
   MiddlewareConsumer,
   RequestMethod,
 } from "@nestjs/common";
-import { NestMiddleware } from "@nestjs/common";
+import { NestMiddleware, GlobalHttpExceptionFilter } from "@nestjs/common";
 
 export class NestApplication implements MiddlewareConsumer {
   private readonly app: Express = express();
@@ -26,6 +26,11 @@ export class NestApplication implements MiddlewareConsumer {
   private readonly middlewares = [];
   // 记录中间件要排除的路径
   private readonly excludeRoutes = [];
+  // 默认全局异常过滤器
+  private readonly defaultGlobalHttpExceptionFilter =
+    new GlobalHttpExceptionFilter();
+  // 全局过滤器数组
+  private readonly globalHttpExceptionFilters = [];
   // module 就是入口模块类
   constructor(protected readonly module: ClassConstructor) {
     this.app.use(express.json());
@@ -33,6 +38,12 @@ export class NestApplication implements MiddlewareConsumer {
   }
   use(middleware: any) {
     this.app.use(middleware);
+  }
+  /**
+   * 注册全局过滤器
+   */
+  useGlobalFilters(...filters) {
+    this.globalHttpExceptionFilters.push(...filters);
   }
   /**
    * 初始化中间件
@@ -271,6 +282,12 @@ export class NestApplication implements MiddlewareConsumer {
       const prefix = Reflect.getMetadata("prefix", Controller) || "/";
       Logger.log(`${Controller.name} {${prefix}}`, "RouteResolver");
 
+      // 获取控制器上异常过滤器
+      const controllerFilters =
+        Reflect.getMetadata("filters", Controller) ?? [];
+      // 将过滤器添加到模块中，方便后续解析依赖获取provider
+      defineModule(this.module, controllerFilters);
+
       // 3.读取控制器上被 Get,Post 等装饰器装饰的方法上的元数据
       const controllerPrototype = Controller.prototype;
       for (const methodName of Object.getOwnPropertyNames(
@@ -300,46 +317,69 @@ export class NestApplication implements MiddlewareConsumer {
           "headers",
           controllerPrototype[methodName]
         );
+        // 获取方法上的过滤器
+        const methodFilters =
+          Reflect.getMetadata("filters", controllerPrototype[methodName]) ?? [];
+        // 将过滤器添加到模块中，方便后续解析依赖获取provider
+        defineModule(this.module, methodFilters);
 
         //配置路由
         const routePath = path.posix.join("/", prefix, route);
         this.app[requestMethod.toLowerCase()](
           routePath,
           (req: ExpressRequest, res: ExpressResponse, next: NextFunction) => {
-            // 处理参数
-            const args = this.resolveParams(
-              controller,
-              methodName,
-              req,
-              res,
-              next
-            );
-            // 调用控制器上的方法,得到结果
-            const rest = controller[methodName](...args);
-            // 如果设置了状态码，就强制设置指定状态码
-            if (statusCode) {
-              res.status(statusCode);
-            }
-            // 判断是否要重定向
-            if (redirectUrl) {
-              if (rest && rest.url) {
-                return res.redirect(rest.statusCode || 302, rest.url);
+            // nestjs 上下文
+            const host = {
+              switchToHttp: () => ({
+                getRequest: () => req,
+                getResponse: () => res,
+                getNext: () => next,
+              }),
+            };
+            try {
+              // 处理参数
+              const args = this.resolveParams(
+                controller,
+                methodName,
+                req,
+                res,
+                next,
+                host
+              );
+              // 调用控制器上的方法,得到结果
+              const rest = controller[methodName](...args);
+              // 如果设置了状态码，就强制设置指定状态码
+              if (statusCode) {
+                res.status(statusCode);
               }
-              return res.redirect(redirectStatusCode, redirectUrl);
-            }
-            // 判断是否有使用Response装饰器，如果有就不处理返回
-            const responseMetadata = this.getResponseMetadata(
-              controller,
-              methodName
-            );
-            // 如果有设置响应头
-            if (headers && headers.length) {
-              headers.forEach((item) => {
-                res.setHeader(item.key, item.value);
-              });
-            }
-            if (!responseMetadata || responseMetadata.data?.passThrough) {
-              res.send(rest);
+              // 判断是否要重定向
+              if (redirectUrl) {
+                if (rest && rest.url) {
+                  return res.redirect(rest.statusCode || 302, rest.url);
+                }
+                return res.redirect(redirectStatusCode, redirectUrl);
+              }
+              // 判断是否有使用Response装饰器，如果有就不处理返回
+              const responseMetadata = this.getResponseMetadata(
+                controller,
+                methodName
+              );
+              // 如果有设置响应头
+              if (headers && headers.length) {
+                headers.forEach((item) => {
+                  res.setHeader(item.key, item.value);
+                });
+              }
+              if (!responseMetadata || responseMetadata.data?.passThrough) {
+                res.send(rest);
+              }
+            } catch (error) {
+              this.callExceptionFilter(
+                error,
+                host,
+                methodFilters,
+                controllerFilters
+              );
             }
           }
         );
@@ -353,6 +393,37 @@ export class NestApplication implements MiddlewareConsumer {
       }
     }
     Logger.log(`Nest application successfully started`, "NestApplication");
+  }
+  /** 调用异常过滤器 */
+  callExceptionFilter(error, host, methodFilters, controllerFilters) {
+    // 按方法，控制器，全局，默认过滤器的顺序依次执行，找到第一个能处理的过滤器执行就可以了
+    const allFilters = [
+      ...methodFilters,
+      ...controllerFilters,
+      ...this.globalHttpExceptionFilters,
+      this.defaultGlobalHttpExceptionFilter,
+    ];
+    for (const filter of allFilters) {
+      let filterInstance = this.getFilterInstance(filter);
+      // 找到过滤器需要处理的异常
+      const exceptions =
+        Reflect.getMetadata("catch", filterInstance.constructor) ?? [];
+      if (
+        exceptions.length === 0 ||
+        exceptions.some((exception) => error instanceof exception)
+      ) {
+        filterInstance.catch(error, host);
+        break;
+      }
+    }
+  }
+  /** 获取过滤器实例 */
+  getFilterInstance(filter) {
+    if (filter instanceof Function) {
+      const dependencies = this.resolveDependencies(filter);
+      return new filter(...dependencies);
+    }
+    return filter;
   }
   private getResponseMetadata(instance: any, methodName: string) {
     const metadata = Reflect.getMetadata("params", instance, methodName);
@@ -394,21 +465,14 @@ export class NestApplication implements MiddlewareConsumer {
     methodName: string,
     req: ExpressRequest,
     res: ExpressResponse,
-    next: NextFunction
+    next: NextFunction,
+    host
   ) {
     const paramsMetadata =
       Reflect.getMetadata("params", instance, methodName) || [];
     // 生序排列后根据key的类型来获取参数
     return paramsMetadata.map((param) => {
       const { key, data } = param;
-      // nestjs 上下文
-      const ctx = {
-        switchToHttp: () => ({
-          getRequest: () => req,
-          getResponse: () => res,
-          getNext: () => next,
-        }),
-      };
       switch (key) {
         case "Request":
         case "Req":
@@ -431,7 +495,7 @@ export class NestApplication implements MiddlewareConsumer {
         case "Next":
           return next;
         case "DecoratorFactory":
-          return param.factory(data, ctx);
+          return param.factory(data, host);
       }
     });
   }
