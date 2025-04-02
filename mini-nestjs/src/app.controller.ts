@@ -23,7 +23,7 @@ import {
 } from "./custom-exception.filter";
 
 @Controller()
-@UseFilters(new CustomExceptionFilterUseClass())
+// @UseFilters(new CustomExceptionFilterUseClass())
 export class AppController {
   constructor(
     private loggerClassService: LoggerClassService,
@@ -109,5 +109,10 @@ export class AppController {
   @Get("customException4")
   customException4() {
     throw new BadRequestException("Bad Request", "from global");
+  }
+
+  @Get("customException5")
+  customException5() {
+    throw new BadRequestException("Bad Request", "from global APP_FILTER");
   }
 }

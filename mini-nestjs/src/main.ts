@@ -19,7 +19,7 @@ async function bootstrap() {
     req.user = { name: "jack", role: "admin" };
     next();
   });
-  app.useGlobalFilters(new CustomExceptionFilterUseClass());
+  // app.useGlobalFilters(new CustomExceptionFilterUseClass());
   await app.listen(3000);
 }
 

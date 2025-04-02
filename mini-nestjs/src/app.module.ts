@@ -12,11 +12,19 @@ import { DynamicConfigModule } from "./dynamicConfig.module";
 import { AppService } from "./app.service";
 import { LoggerMiddleware } from "./logger.middleware";
 import { loggerFunction } from "./logger-function.middleware";
+import { APP_FILTER } from "@nestjs/core";
+import { CustomExceptionFilterUseProvider } from "./custom-exception.filter";
 @Module({
   controllers: [AppController, UserController],
   // 导入模块
   imports: [LoggerModule, CoreModule, DynamicConfigModule.forRoot("456")],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_FILTER,
+      useClass: CustomExceptionFilterUseProvider,
+    },
+  ],
   exports: [AppService],
 })
 export class AppModule implements NestModule {

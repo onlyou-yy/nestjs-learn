@@ -11,6 +11,7 @@ import {
   RequestMethod,
 } from "@nestjs/common";
 import { NestMiddleware, GlobalHttpExceptionFilter } from "@nestjs/common";
+import { APP_FILTER } from "./constants";
 
 export class NestApplication implements MiddlewareConsumer {
   private readonly app: Express = express();
@@ -501,9 +502,23 @@ export class NestApplication implements MiddlewareConsumer {
       }
     });
   }
+  async initGlobalFilters() {
+    // 获取当前模块上的全部provider
+    const providers = Reflect.getMetadata("providers", this.module) ?? [];
+    for (const provider of providers) {
+      if (provider.provide === APP_FILTER) {
+        const providerInstances = this.getProviderByToken(
+          provider.provide,
+          this.module
+        );
+        this.useGlobalFilters(providerInstances);
+      }
+    }
+  }
   async listen(port: number) {
     await this.initProviders();
     await this.initMiddleware();
+    await this.initGlobalFilters();
     // 调用 express 的 listen 方法启动一个服务
     await this.init();
     this.app.listen(port, () => {

@@ -42,3 +42,6 @@ GET http://localhost:3000/customException3
 ### 测试自定义控制器异常捕获
 GET http://localhost:3000/customException4
 
+### 测试自定义控制器异常捕获,作为provider使用
+GET http://localhost:3000/customException5
+

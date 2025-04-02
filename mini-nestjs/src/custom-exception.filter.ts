@@ -36,3 +36,21 @@ export class CustomExceptionFilterUseMethod implements ExceptionFilter {
     });
   }
 }
+
+// 只捕获处理 BadRequestException 的异常 (用在provider)
+@Catch(BadRequestException)
+export class CustomExceptionFilterUseProvider implements ExceptionFilter {
+  constructor(private logger?: LoggerService) {}
+  catch(exception: any, host: ArgumentsHost) {
+    this.logger?.log("CustomExceptionFilterUseProvider logger");
+    const ctx = host.switchToHttp();
+    const response = ctx.getResponse<Response>();
+    const request = ctx.getRequest<Request>();
+    response.status(exception.getStatus()).json({
+      statusCode: exception.getStatus(),
+      message: `method:${JSON.stringify(exception.getResponse())}`,
+      timestamp: new Date().toLocaleDateString(),
+      path: request.originalUrl,
+    });
+  }
+}

@@ -21,19 +21,19 @@ export function Module(metadata: IModuleMetadata): ClassDecorator {
     defineModule(target, metadata.controllers);
     // 控制器，也就是路由类
     Reflect.defineMetadata("controllers", metadata.controllers, target);
-    // 为 providers 增加标识
-    // let providers = (metadata.providers ?? [])
-    //   .map((provider) => {
-    //     if (provider instanceof Function) {
-    //       return provider;
-    //     } else if (provider?.useClass instanceof Function) {
-    //       return provider.useClass;
-    //     } else {
-    //       return null;
-    //     }
-    //   })
-    //   .filter(Boolean);
-    defineModule(target, metadata.providers ?? []);
+    // 为 providers 增加标识,只需要给类加标识即可
+    let providers = (metadata.providers ?? [])
+      .map((provider) => {
+        if (provider instanceof Function) {
+          return provider;
+        } else if (provider?.useClass instanceof Function) {
+          return provider.useClass;
+        } else {
+          return null;
+        }
+      })
+      .filter(Boolean);
+    defineModule(target, providers ?? []);
     // 服务，也就是业务类
     Reflect.defineMetadata("providers", metadata.providers, target);
     // 导入的模块
