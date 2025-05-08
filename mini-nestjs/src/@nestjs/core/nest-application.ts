@@ -211,6 +211,7 @@ export class NestApplication implements MiddlewareConsumer {
         }
       }
     }
+    this.initController(module);
   }
   /** 判断是否是模块 */
   isModule(exportToken) {
@@ -267,10 +268,10 @@ export class NestApplication implements MiddlewareConsumer {
     }
   }
   // 初始化，配置路由
-  async init() {
+  async initController(module) {
     // 1.读取模块管理的controllers元数据
     const controllers: ClassConstructor[] =
-      Reflect.getMetadata("controllers", this.module) || [];
+      Reflect.getMetadata("controllers", module) || [];
     Logger.log(
       `${this.module.name} dependencies initialized`,
       "InstanceLoader"
@@ -521,7 +522,7 @@ export class NestApplication implements MiddlewareConsumer {
     await this.initMiddleware();
     await this.initGlobalFilters();
     // 调用 express 的 listen 方法启动一个服务
-    await this.init();
+    await this.initController(this.module);
     this.app.listen(port, () => {
       Logger.log(
         `Application is running on http://localhost:${port}`,
