@@ -29,6 +29,7 @@ import {
 import { Body } from "@nestjs/common";
 import { CreateUserDto } from "./create-user.dto";
 import { ClassValidatePipe } from "./class.validate.pipe";
+import { GlobalPipe } from "./global.pipe";
 
 @Controller()
 // @UseFilters(new CustomExceptionFilterUseClass())
@@ -161,5 +162,12 @@ export class AppController {
   globalPipe(@Body() userDto: CreateUserDto) {
     console.log(userDto);
     return `globalPipe user be created`;
+  }
+
+  @Post("globalPipeInject/create")
+  // @UsePipes(GlobalPipe)
+  globalPipeInject(@Body() userDto: CreateUserDto) {
+    console.log(userDto);
+    return `globalPipeInject user be created`;
   }
 }

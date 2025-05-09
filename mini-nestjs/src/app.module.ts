@@ -12,8 +12,9 @@ import { DynamicConfigModule } from "./dynamicConfig.module";
 import { AppService } from "./app.service";
 import { LoggerMiddleware } from "./logger.middleware";
 import { loggerFunction } from "./logger-function.middleware";
-import { APP_FILTER } from "@nestjs/core";
+import { APP_FILTER, APP_PIPE } from "@nestjs/core";
 import { CustomExceptionFilterUseProvider } from "./custom-exception.filter";
+import { GlobalPipe } from "./global.pipe";
 @Module({
   controllers: [AppController, UserController],
   // 导入模块
@@ -23,6 +24,11 @@ import { CustomExceptionFilterUseProvider } from "./custom-exception.filter";
     {
       provide: APP_FILTER,
       useClass: CustomExceptionFilterUseProvider,
+    },
+    // 这样注入的管道可以使用依赖
+    {
+      provide: APP_PIPE,
+      useClass: GlobalPipe,
     },
   ],
   exports: [AppService],

@@ -11,7 +11,7 @@ import {
   RequestMethod,
 } from "@nestjs/common";
 import { NestMiddleware, GlobalHttpExceptionFilter } from "@nestjs/common";
-import { APP_FILTER, DECORATOR_FACTORY } from "./constants";
+import { APP_FILTER, APP_PIPE, DECORATOR_FACTORY } from "./constants";
 import { PipeTransform } from "@nestjs/common";
 
 export class NestApplication implements MiddlewareConsumer {
@@ -575,12 +575,26 @@ export class NestApplication implements MiddlewareConsumer {
       }
     }
   }
+  async initGlobalPipe() {
+    // 获取当前模块上的全部provider
+    const providers = Reflect.getMetadata("providers", this.module) ?? [];
+    for (const provider of providers) {
+      if (provider.provide === APP_PIPE) {
+        const providerInstances = this.getProviderByToken(
+          provider.provide,
+          this.module
+        );
+        this.useGlobalPipe(providerInstances);
+      }
+    }
+  }
   async listen(port: number) {
     await this.initProviders();
     await this.initMiddleware();
     await this.initGlobalFilters();
-    // 调用 express 的 listen 方法启动一个服务
+    await this.initGlobalPipe();
     await this.initController(this.module);
+    // 调用 express 的 listen 方法启动一个服务
     this.app.listen(port, () => {
       Logger.log(
         `Application is running on http://localhost:${port}`,

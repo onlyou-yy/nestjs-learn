@@ -92,5 +92,13 @@ content-type: application/json
   "age": "18"
 }
 
+### 测试参数管道依赖注入
+POST http://localhost:3000/globalPipeInject/create
+content-type: application/json
+
+{
+  "name": "jack",
+  "age": 18
+}
 
 
