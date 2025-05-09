@@ -18,7 +18,7 @@ export class HttpException extends Error {
 
 // nestjs中有很多预设的 错误处理过滤器 https://nest.nodejs.cn/exception-filters#%E5%86%85%E7%BD%AE-http-%E5%BC%82%E5%B8%B8
 export class BadRequestException extends HttpException {
-  constructor(message, error) {
+  constructor(message, error?) {
     super(
       {
         message: message,

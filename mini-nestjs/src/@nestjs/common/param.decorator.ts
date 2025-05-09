@@ -1,29 +1,42 @@
 import "reflect-metadata";
-import { ClassConstructor } from "@nestjs/core/types";
+import { DECORATOR_FACTORY } from "@nestjs/core";
+import { DESIGN_PARAM_TYPES } from "./constants";
 
 export const createParamDecorator = (keyOrFactory: string | Function) => {
   // target 当装饰的是构造函数的参数时target是类本身,当装饰器装饰的是方法的参数时target是控制器原型
   // propertyKey 是方法名
   // parameterIndex 是参数的索引
-  return (data?: any) =>
+  return (data?: any, ...pipes: any[]) =>
     (target: any, propertyKey: string, parameterIndex: number) => {
       //给控制器类型的原型的propertyKey方法定义元数据
       //属性名是params 值是一个数组，数组里应该放置数据，表示那个位置使用哪个装饰器
 
       const existingParams =
         Reflect.getMetadata(`params`, target, propertyKey) || [];
+
+      const metatype = Reflect.getMetadata(
+        DESIGN_PARAM_TYPES,
+        target,
+        propertyKey
+      )[parameterIndex];
+
       if (keyOrFactory instanceof Function) {
+        // 如果传过来的是一个函数的话，存放参数索引，key定死为装饰器工厂，factory就是用来获取值的工厂
         existingParams[parameterIndex] = {
           parameterIndex,
-          key: "DecoratorFactory",
+          key: DECORATOR_FACTORY,
           data,
           factory: keyOrFactory,
+          pipes,
+          metatype,
         };
       } else {
         existingParams[parameterIndex] = {
           parameterIndex,
           key: keyOrFactory,
           data,
+          pipes,
+          metatype,
         };
       }
 

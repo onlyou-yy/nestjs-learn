@@ -45,3 +45,52 @@ GET http://localhost:3000/customException4
 ### 测试自定义控制器异常捕获,作为provider使用
 GET http://localhost:3000/customException5
 
+### 测试管道 parseIntPipe 成功
+GET http://localhost:3000/pipeInt/111
+
+### 测试管道 parseIntPipe 失败
+GET http://localhost:3000/pipeInt/aaa
+
+
+### 测试管道 pipeArray
+GET http://localhost:3000/pipeArray/1@2@3
+
+### 测试管道 class-validate 和 class-transform
+### 测试参数管道
+POST http://localhost:3000/paramPipe/create
+content-type: application/json
+
+{
+  "name": "jack",
+  "age": "18"
+}
+
+### 测试参数管道
+POST http://localhost:3000/methodPipe/create
+content-type: application/json
+
+{
+  "name": "jack",
+  "age": "18"
+}
+
+### 测试参数管道
+POST http://localhost:3000/controllerPipe/create
+content-type: application/json
+
+{
+  "name": "jack",
+  "age": 18
+}
+
+### 测试参数管道
+POST http://localhost:3000/globalPipe/create
+content-type: application/json
+
+{
+  "name": "jack",
+  "age": "18"
+}
+
+
+

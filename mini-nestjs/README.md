@@ -244,3 +244,51 @@ nestjs 中的 Provider 就是通过 IOC 和 DI 实现的.
 ## 中间件
 
 中间件是在路由处理程序之前调用的函数。中间件函数可以访问 request 和 response 对象，以及应用请求-响应周期中的 next() 中间件函数。下一个中间件函数通常由名为 next 的变量表示。
+
+## 管道
+
+管道有两个典型的用例：
+
+- 转型：将输入数据转换为所需的形式（例如，从字符串到整数）
+- 验证：评估输入数据，如果有效，只需将其原样传递；否则抛出异常
+
+### class-validator 和 class-transformer
+
+- `class-validator`:用于在 ts 中执行对象的验证,它通常用于验证传入的请求数据,以确保数据格式和内容符合预期
+- `class-transformer`:用于类实例和对象之间的相互转化
+
+```ts
+import { IsString, IsInt, validate } from "class-validator";
+
+export class CreateCatDto {
+  @IsString()
+  name: string;
+
+  @IsInt()
+  age: number;
+}
+
+const user = new CreateCatDto();
+user.name = "jack";
+user.age = "12";
+validate(user).then((errors) => {
+  if (errors.length > 0) {
+    console.log("验证失败", errors);
+  } else {
+    console.log("验证成功", errors);
+  }
+});
+```
+
+```ts
+import { plainToInstance, instanceToPlain } from "class-transformer";
+class User {
+  name: string;
+  age: number;
+}
+const plainUser = { name: "jack", age: 19 };
+// 对象转实例
+const user = plainToInstance(User, plainUser);
+// 实例转对象
+const plainObject = instanceToPlain(user);
+```

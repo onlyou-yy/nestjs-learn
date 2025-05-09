@@ -11,7 +11,8 @@ import {
   RequestMethod,
 } from "@nestjs/common";
 import { NestMiddleware, GlobalHttpExceptionFilter } from "@nestjs/common";
-import { APP_FILTER } from "./constants";
+import { APP_FILTER, DECORATOR_FACTORY } from "./constants";
+import { PipeTransform } from "@nestjs/common";
 
 export class NestApplication implements MiddlewareConsumer {
   private readonly app: Express = express();
@@ -32,6 +33,8 @@ export class NestApplication implements MiddlewareConsumer {
     new GlobalHttpExceptionFilter();
   // 全局过滤器数组
   private readonly globalHttpExceptionFilters = [];
+  // 全局管道数组
+  private readonly globalPipes: PipeTransform[] = [];
   // module 就是入口模块类
   constructor(protected readonly module: ClassConstructor) {
     this.app.use(express.json());
@@ -40,6 +43,13 @@ export class NestApplication implements MiddlewareConsumer {
   }
   use(middleware: any) {
     this.app.use(middleware);
+  }
+  /**
+   * 注册全局管道
+   * @param pipes 管道
+   */
+  useGlobalPipe(...pipes: PipeTransform[]) {
+    this.globalPipes.push(...pipes);
   }
   /**
    * 注册全局过滤器
@@ -293,6 +303,9 @@ export class NestApplication implements MiddlewareConsumer {
       // 将过滤器添加到模块中，方便后续解析依赖获取provider
       defineModule(this.module, controllerFilters);
 
+      // 获取控制器上的管道
+      const controllerPipes = Reflect.getMetadata("pipes", Controller) ?? [];
+
       // 3.读取控制器上被 Get,Post 等装饰器装饰的方法上的元数据
       const controllerPrototype = Controller.prototype;
       for (const methodName of Object.getOwnPropertyNames(
@@ -328,11 +341,22 @@ export class NestApplication implements MiddlewareConsumer {
         // 将过滤器添加到模块中，方便后续解析依赖获取provider
         defineModule(this.module, methodFilters);
 
+        // 获取方法上的管道
+        const methodPipes =
+          Reflect.getMetadata("pipes", controllerPrototype[methodName]) ?? [];
+
+        // 控制器和方法上的管道集合
+        const pipes = [...controllerPipes, ...methodPipes];
+
         //配置路由
         const routePath = path.posix.join("/", prefix, route);
         this.app[requestMethod.toLowerCase()](
           routePath,
-          (req: ExpressRequest, res: ExpressResponse, next: NextFunction) => {
+          async (
+            req: ExpressRequest,
+            res: ExpressResponse,
+            next: NextFunction
+          ) => {
             // nestjs 上下文
             const host = {
               switchToHttp: () => ({
@@ -343,13 +367,14 @@ export class NestApplication implements MiddlewareConsumer {
             };
             try {
               // 处理参数
-              const args = this.resolveParams(
+              const args = await this.resolveParams(
                 controller,
                 methodName,
                 req,
                 res,
                 next,
-                host
+                host,
+                pipes
               );
               // 调用控制器上的方法,得到结果
               const rest = controller[methodName](...args);
@@ -471,38 +496,71 @@ export class NestApplication implements MiddlewareConsumer {
     req: ExpressRequest,
     res: ExpressResponse,
     next: NextFunction,
-    host
+    host,
+    pipes
   ) {
     const paramsMetadata =
       Reflect.getMetadata("params", instance, methodName) || [];
     // 生序排列后根据key的类型来获取参数
-    return paramsMetadata.map((param) => {
-      const { key, data } = param;
-      switch (key) {
-        case "Request":
-        case "Req":
-          return req;
-        case "Query":
-          return data ? req.query[data] : req.query;
-        case "Session":
-          return data ? req.session[data] : req.session;
-        case "Body":
-          return data ? req.body[data] : req.body;
-        case "Params":
-          return data ? req.params[data] : req.params;
-        case "Headers":
-          return data ? req.headers[data] : req.headers;
-        case "IP":
-          return req.ip;
-        case "Response":
-        case "Res":
-          return res;
-        case "Next":
-          return next;
-        case "DecoratorFactory":
-          return param.factory(data, host);
-      }
-    });
+    return Promise.all(
+      paramsMetadata.map(async (param) => {
+        const { key, data, factory, pipes: paramPipes, metatype } = param;
+        let value;
+        switch (key) {
+          case "Request":
+          case "Req":
+            value = req;
+            break;
+          case "Query":
+            value = data ? req.query[data] : req.query;
+            break;
+          case "Session":
+            value = data ? req.session[data] : req.session;
+            break;
+          case "Body":
+            value = data ? req.body[data] : req.body;
+            break;
+          case "Params":
+            value = data ? req.params[data] : req.params;
+            break;
+          case "Headers":
+            value = data ? req.headers[data] : req.headers;
+            break;
+          case "IP":
+            value = req.ip;
+            break;
+          case "Response":
+          case "Res":
+            value = res;
+            break;
+          case "Next":
+            value = next;
+            break;
+          case DECORATOR_FACTORY:
+            value = factory(data, host);
+            break;
+        }
+        // 使用管道对值进行处理转化
+        for (const pipe of [...this.globalPipes, ...pipes, ...paramPipes]) {
+          const pipeInstance = this.getPipeInstance(pipe);
+          const keyType =
+            key === DECORATOR_FACTORY ? "custom" : key.toLowerCase();
+          value = await pipeInstance.transform(value, {
+            type: keyType,
+            data,
+            metatype,
+          });
+        }
+        return value;
+      })
+    );
+  }
+  private getPipeInstance(pipe): PipeTransform {
+    if (typeof pipe === "function") {
+      const dependencies = this.resolveDependencies(pipe);
+      return new pipe(...dependencies);
+    }
+    return pipe;
   }
   async initGlobalFilters() {
     // 获取当前模块上的全部provider

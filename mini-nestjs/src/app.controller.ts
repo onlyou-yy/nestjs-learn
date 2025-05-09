@@ -3,7 +3,12 @@ import {
   Controller,
   Get,
   Inject,
+  Params,
   UseFilters,
+  ParseIntPipe,
+  ParseArrayPipe,
+  Post,
+  UsePipes,
 } from "@nestjs/common";
 import {
   FactoryService,
@@ -21,9 +26,13 @@ import {
   CustomExceptionFilterUseClass,
   CustomExceptionFilterUseMethod,
 } from "./custom-exception.filter";
+import { Body } from "@nestjs/common";
+import { CreateUserDto } from "./create-user.dto";
+import { ClassValidatePipe } from "./class.validate.pipe";
 
 @Controller()
 // @UseFilters(new CustomExceptionFilterUseClass())
+@UsePipes(ClassValidatePipe)
 export class AppController {
   constructor(
     private loggerClassService: LoggerClassService,
@@ -114,5 +123,43 @@ export class AppController {
   @Get("customException5")
   customException5() {
     throw new BadRequestException("Bad Request", "from global APP_FILTER");
+  }
+
+  @Get("pipeInt/:id")
+  pipeInt(@Params("id", ParseIntPipe) id: number) {
+    return `get id is [${typeof id}] ${id}`;
+  }
+
+  @Get("pipeArray/:value")
+  pipeArray(
+    @Params("value", new ParseArrayPipe({ items: Number, separator: "@" }))
+    value: number
+  ) {
+    return `get id is [${typeof value}] ${value}`;
+  }
+
+  @Post("paramPipe/create")
+  paramPipe(@Body(null, new ClassValidatePipe()) userDto: CreateUserDto) {
+    console.log(userDto);
+    return `paramPipe user be created`;
+  }
+
+  @Post("methodPipe/create")
+  @UsePipes(ClassValidatePipe)
+  methodPipe(@Body() userDto: CreateUserDto) {
+    console.log(userDto);
+    return `methodPipe user be created`;
+  }
+
+  @Post("controllerPipe/create")
+  controllerPipe(@Body() userDto: CreateUserDto) {
+    console.log(userDto);
+    return `controllerPipe user be created`;
+  }
+
+  @Post("globalPipe/create")
+  globalPipe(@Body() userDto: CreateUserDto) {
+    console.log(userDto);
+    return `globalPipe user be created`;
   }
 }
