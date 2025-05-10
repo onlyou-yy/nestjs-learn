@@ -292,3 +292,13 @@ const user = plainToInstance(User, plainUser);
 // 实例转对象
 const plainObject = instanceToPlain(user);
 ```
+
+### 守卫
+
+守卫有单一的责任。它们根据运行时存在的某些条件（如权限、角色、ACL 等）确定给定请求是否将由路由处理程序处理。
+
+## 总体流程
+
+```
+请求 => 中间件 => 守卫 => 管道 => 拦截器前 => 路由处理程序 => 拦截器后 => 异常过滤器 => 响应
+```

@@ -11,8 +11,18 @@ import {
   RequestMethod,
 } from "@nestjs/common";
 import { NestMiddleware, GlobalHttpExceptionFilter } from "@nestjs/common";
-import { APP_FILTER, APP_PIPE, DECORATOR_FACTORY } from "./constants";
+import {
+  APP_FILTER,
+  APP_GUARD,
+  APP_PIPE,
+  DECORATOR_FACTORY,
+} from "./constants";
 import { PipeTransform } from "@nestjs/common";
+import { ExecutionContext } from "@nestjs/common";
+import { ArgumentsHost } from "@nestjs/common";
+import { CanActivate } from "@nestjs/common";
+import { ForbiddenException } from "@nestjs/common";
+import { Reflector } from "./reflector";
 
 export class NestApplication implements MiddlewareConsumer {
   private readonly app: Express = express();
@@ -35,6 +45,8 @@ export class NestApplication implements MiddlewareConsumer {
   private readonly globalHttpExceptionFilters = [];
   // 全局管道数组
   private readonly globalPipes: PipeTransform[] = [];
+  // 全局守卫数组
+  private readonly globalGuards: CanActivate[] = [];
   // module 就是入口模块类
   constructor(protected readonly module: ClassConstructor) {
     this.app.use(express.json());
@@ -150,9 +162,16 @@ export class NestApplication implements MiddlewareConsumer {
     };
   }
   /**
+   * 添加程序内容默认的 provider
+   */
+  addDefaultProviders() {
+    this.addProvider(Reflector, this.module, true);
+  }
+  /**
    * 初始化 providers
    */
   async initProviders() {
+    this.addDefaultProviders();
     // 重写注册providers的流程
     // 获取导入的模块，并手机导入模块的 providers
     const imports = Reflect.getMetadata("imports", this.module) ?? [];
@@ -277,6 +296,24 @@ export class NestApplication implements MiddlewareConsumer {
       throw new Error("provider is not valid");
     }
   }
+  private getGuardInstance(guard): CanActivate {
+    if (typeof guard === "function") {
+      const dependencies = this.resolveDependencies(guard);
+      return new guard(...dependencies);
+    }
+    return guard;
+  }
+  // 执行路由守卫
+  async callGuards(guards: CanActivate[], context: ExecutionContext) {
+    for (const guard of guards) {
+      const guardInstance = this.getGuardInstance(guard);
+      const canActivate = await guardInstance.canActivate(context);
+      if (!canActivate) {
+        // 不通过
+        throw new ForbiddenException("Forbidden resource");
+      }
+    }
+  }
   // 初始化，配置路由
   async initController(module) {
     // 1.读取模块管理的controllers元数据
@@ -305,6 +342,9 @@ export class NestApplication implements MiddlewareConsumer {
 
       // 获取控制器上的管道
       const controllerPipes = Reflect.getMetadata("pipes", Controller) ?? [];
+
+      // 获取控制器上的守卫
+      const controllerGuards = Reflect.getMetadata("guards", Controller) ?? [];
 
       // 3.读取控制器上被 Get,Post 等装饰器装饰的方法上的元数据
       const controllerPrototype = Controller.prototype;
@@ -348,6 +388,17 @@ export class NestApplication implements MiddlewareConsumer {
         // 控制器和方法上的管道集合
         const pipes = [...controllerPipes, ...methodPipes];
 
+        // 获取方法上的守卫
+        const methodGuards =
+          Reflect.getMetadata("guards", controllerPrototype[methodName]) ?? [];
+
+        // 控制器和方法上的守卫集合
+        const guards = [
+          ...this.globalGuards,
+          ...controllerGuards,
+          ...methodGuards,
+        ];
+
         //配置路由
         const routePath = path.posix.join("/", prefix, route);
         this.app[requestMethod.toLowerCase()](
@@ -358,15 +409,21 @@ export class NestApplication implements MiddlewareConsumer {
             next: NextFunction
           ) => {
             // nestjs 上下文
-            const host = {
+            const host: ArgumentsHost = {
               switchToHttp: () => ({
-                getRequest: () => req,
-                getResponse: () => res,
-                getNext: () => next,
+                getRequest: <ExpressRequest>() => req as ExpressRequest,
+                getResponse: <ExpressResponse>() => res as ExpressResponse,
+                getNext: <NextFunction>() => next as NextFunction,
               }),
+            };
+            const context: ExecutionContext = {
+              ...host,
+              getClass: <ClassConstructor>() => Controller as ClassConstructor,
+              getHandler: () => controllerPrototype[methodName],
             };
             try {
               // 处理参数
+              await this.callGuards(guards, context);
               const args = await this.resolveParams(
                 controller,
                 methodName,
@@ -588,11 +645,28 @@ export class NestApplication implements MiddlewareConsumer {
       }
     }
   }
+  initGlobalGuard() {
+    // 获取当前模块上的全部provider
+    const providers = Reflect.getMetadata("providers", this.module) ?? [];
+    for (const provider of providers) {
+      if (provider.provide === APP_GUARD) {
+        const providerInstances = this.getProviderByToken(
+          provider.provide,
+          this.module
+        );
+        this.useGlobalGuard(providerInstances);
+      }
+    }
+  }
+  useGlobalGuard(...guards) {
+    this.globalGuards.push(...guards);
+  }
   async listen(port: number) {
     await this.initProviders();
     await this.initMiddleware();
     await this.initGlobalFilters();
     await this.initGlobalPipe();
+    await this.initGlobalGuard();
     await this.initController(this.module);
     // 调用 express 的 listen 方法启动一个服务
     this.app.listen(port, () => {

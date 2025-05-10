@@ -101,4 +101,18 @@ content-type: application/json
   "age": 18
 }
 
+### 测试守卫 有权限
+GET http://localhost:3000/account?role=admin
+
+### 测试守卫 没有权限
+GET http://localhost:3000/account?role=user
+
+### 测试守卫2
+GET http://localhost:3000/account/role2?role=admin
+
+### 测试全局守卫
+GET http://localhost:3000/account/global?role=admin
+
+
+
 

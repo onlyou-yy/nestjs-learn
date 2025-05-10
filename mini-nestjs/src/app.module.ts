@@ -12,11 +12,14 @@ import { DynamicConfigModule } from "./dynamicConfig.module";
 import { AppService } from "./app.service";
 import { LoggerMiddleware } from "./logger.middleware";
 import { loggerFunction } from "./logger-function.middleware";
-import { APP_FILTER, APP_PIPE } from "@nestjs/core";
+import { APP_FILTER, APP_GUARD, APP_PIPE } from "@nestjs/core";
 import { CustomExceptionFilterUseProvider } from "./custom-exception.filter";
 import { GlobalPipe } from "./global.pipe";
+import { AccountController } from "./account.controller";
+import { AuthMiddleware } from "./auth.middleware";
+import { AuthGuard } from "./auth.guard";
 @Module({
-  controllers: [AppController, UserController],
+  controllers: [AppController, UserController, AccountController],
   // 导入模块
   imports: [LoggerModule, CoreModule, DynamicConfigModule.forRoot("456")],
   providers: [
@@ -30,6 +33,10 @@ import { GlobalPipe } from "./global.pipe";
       provide: APP_PIPE,
       useClass: GlobalPipe,
     },
+    {
+      provide: APP_GUARD,
+      useClass: AuthGuard,
+    },
   ],
   exports: [AppService],
 })
@@ -37,6 +44,8 @@ export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     // 针对 GET /middle 路由应用logger中间键
     consumer
+      .apply(AuthMiddleware)
+      .forRoutes("*")
       .apply(LoggerMiddleware)
       .forRoutes("middle")
       .apply(loggerFunction)

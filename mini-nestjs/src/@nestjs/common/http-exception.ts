@@ -29,3 +29,9 @@ export class BadRequestException extends HttpException {
     );
   }
 }
+
+export class ForbiddenException extends HttpException {
+  constructor(message) {
+    super(message, HttpStatus.FORBIDDEN);
+  }
+}
