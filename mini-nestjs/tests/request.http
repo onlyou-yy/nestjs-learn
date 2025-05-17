@@ -128,3 +128,17 @@ GET http://localhost:3000/pay/cache?id=1
 ### 测试拦截器 请求超时
 GET http://localhost:3000/pay/timeout
 
+### 测试文件上传
+POST http://localhost:3000/upload
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="text"
+
+title
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="image"; filename="1.png"
+Content-Type: image/png
+
+< ./1.png
+------WebKitFormBoundary7MA4YWxkTrZu0gW--

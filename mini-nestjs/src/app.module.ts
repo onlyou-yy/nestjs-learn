@@ -20,12 +20,14 @@ import { AuthMiddleware } from "./auth.middleware";
 import { AuthGuard } from "./auth.guard";
 import { PayController } from "./pay.controller";
 import { Logging5Interceptor } from "./logger1.interceptor";
+import { UploadController } from "./upload.controller";
 @Module({
   controllers: [
     AppController,
     UserController,
     AccountController,
     PayController,
+    UploadController
   ],
   // 导入模块
   imports: [LoggerModule, CoreModule, DynamicConfigModule.forRoot("456")],
