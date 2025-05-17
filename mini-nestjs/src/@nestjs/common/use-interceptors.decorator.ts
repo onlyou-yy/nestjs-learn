@@ -1,6 +1,6 @@
 import "reflect-metadata";
 export function UseInterceptors(...interceptors) {
-  return function (target, propertyKey, descriptor) {
+  return function (target, propertyKey?, descriptor?) {
     if (descriptor) {
       // 装饰方法
       const existingInterceptors =

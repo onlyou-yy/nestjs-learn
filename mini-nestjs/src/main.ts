@@ -3,6 +3,7 @@ import { AppModule } from "./app.module";
 import session from "express-session";
 import { CustomExceptionFilterUseClass } from "./custom-exception.filter";
 import { ValidationPipe } from "@nestjs/common";
+import { Logging4Interceptor } from "./logger1.interceptor";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -22,6 +23,7 @@ async function bootstrap() {
   });
   // app.useGlobalFilters(new CustomExceptionFilterUseClass());
   app.useGlobalPipe(new ValidationPipe());
+  app.useGlobalInterceptors(new Logging4Interceptor());
   await app.listen(3000);
 }
 

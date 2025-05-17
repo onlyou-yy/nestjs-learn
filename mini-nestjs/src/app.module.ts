@@ -12,13 +12,14 @@ import { DynamicConfigModule } from "./dynamicConfig.module";
 import { AppService } from "./app.service";
 import { LoggerMiddleware } from "./logger.middleware";
 import { loggerFunction } from "./logger-function.middleware";
-import { APP_FILTER, APP_GUARD, APP_PIPE } from "@nestjs/core";
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from "@nestjs/core";
 import { CustomExceptionFilterUseProvider } from "./custom-exception.filter";
 import { GlobalPipe } from "./global.pipe";
 import { AccountController } from "./account.controller";
 import { AuthMiddleware } from "./auth.middleware";
 import { AuthGuard } from "./auth.guard";
 import { PayController } from "./pay.controller";
+import { Logging5Interceptor } from "./logger1.interceptor";
 @Module({
   controllers: [
     AppController,
@@ -42,6 +43,10 @@ import { PayController } from "./pay.controller";
     {
       provide: APP_GUARD,
       useClass: AuthGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: Logging5Interceptor,
     },
   ],
   exports: [AppService],

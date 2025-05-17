@@ -113,6 +113,18 @@ GET http://localhost:3000/account/role2?role=admin
 ### 测试全局守卫
 GET http://localhost:3000/account/global?role=admin
 
+### 测试拦截器
+GET http://localhost:3000/pay
 
+### 测试拦截器 转化数据
+GET http://localhost:3000/pay/data
 
+### 测试拦截器 错误捕获
+GET http://localhost:3000/pay/error
+
+### 测试拦截器 缓存捕获 发两次可以看到效果
+GET http://localhost:3000/pay/cache?id=1
+
+### 测试拦截器 请求超时
+GET http://localhost:3000/pay/timeout
 

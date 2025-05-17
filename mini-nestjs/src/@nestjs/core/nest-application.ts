@@ -14,6 +14,7 @@ import { NestMiddleware, GlobalHttpExceptionFilter } from "@nestjs/common";
 import {
   APP_FILTER,
   APP_GUARD,
+  APP_INTERCEPTOR,
   APP_PIPE,
   DECORATOR_FACTORY,
 } from "./constants";
@@ -23,6 +24,8 @@ import { ArgumentsHost } from "@nestjs/common";
 import { CanActivate } from "@nestjs/common";
 import { ForbiddenException } from "@nestjs/common";
 import { Reflector } from "./reflector";
+import { from, mergeMap, Observable, of } from "rxjs";
+import { NestInterceptor } from "@nestjs/common";
 
 export class NestApplication implements MiddlewareConsumer {
   private readonly app: Express = express();
@@ -47,6 +50,15 @@ export class NestApplication implements MiddlewareConsumer {
   private readonly globalPipes: PipeTransform[] = [];
   // 全局守卫数组
   private readonly globalGuards: CanActivate[] = [];
+  // 全局拦截器数组
+  private readonly globalInterceptors: NestInterceptor[] = [];
+  // 全局 Token 的Map
+  private readonly globalProviderMap = new Map([
+    [APP_FILTER, new Map()], // 全局过滤器
+    [APP_GUARD, new Map()], // 全局守卫
+    [APP_PIPE, new Map()], // 全局管道
+    [APP_INTERCEPTOR, new Map()], // 全局拦截器
+  ]);
   // module 就是入口模块类
   constructor(protected readonly module: ClassConstructor) {
     this.app.use(express.json());
@@ -55,6 +67,12 @@ export class NestApplication implements MiddlewareConsumer {
   }
   use(middleware: any) {
     this.app.use(middleware);
+  }
+  /**
+   * 注册全局拦截器
+   */
+  useGlobalInterceptors(...interceptors) {
+    this.globalInterceptors.push(...interceptors);
   }
   /**
    * 注册全局管道
@@ -212,7 +230,20 @@ export class NestApplication implements MiddlewareConsumer {
     const providers = Reflect.getMetadata("providers", this.module) || [];
     const isGlobal = Reflect.getMetadata("global", this.module);
     for (const provider of providers) {
-      this.addProvider(provider, this.module, isGlobal);
+      this.processProvider(provider, this.module, isGlobal);
+    }
+  }
+  private processProvider(provider, module, isGlobal) {
+    if (this.globalProviderMap.has(provider.provide)) {
+      // 如果是全局的token对应的provider
+      const instanceMap = this.globalProviderMap.get(provider.provide);
+      const { useClass } = provider;
+      if (!instanceMap.has(useClass)) {
+        const instance = new useClass(...this.resolveDependencies(useClass));
+        instanceMap.set(useClass, instance);
+      }
+    } else {
+      this.addProvider(provider, module, isGlobal);
     }
   }
   /** 从 module 中提取 provider 并进行注册 */
@@ -314,6 +345,13 @@ export class NestApplication implements MiddlewareConsumer {
       }
     }
   }
+  private getInterceptorInstance(interceptor): NestInterceptor {
+    if (typeof interceptor === "function") {
+      const dependencies = this.resolveDependencies(interceptor);
+      return new interceptor(...dependencies);
+    }
+    return interceptor;
+  }
   // 拦截器处理
   callInterceptors(
     controller,
@@ -323,7 +361,25 @@ export class NestApplication implements MiddlewareConsumer {
     context,
     host,
     pipes
-  ) {}
+  ) {
+    const nextFn = (i = 0): Observable<any> => {
+      // 2.当执行完拦截器再执行路由处理函数
+      if (i >= interceptors.length) {
+        const result: any = controller[methodName](...args);
+        // 如果结果 promise （路由处理是异步的），就使用 from，否则用 of
+        return result instanceof Promise ? from(result) : of(result);
+      }
+      // 1.先执行拦截器
+      const interceptor = this.getInterceptorInstance(interceptors[i]);
+      const result = interceptor.intercept(context, {
+        handle: () => nextFn(i + 1),
+      });
+      return from(result).pipe(
+        mergeMap((val) => (val instanceof Observable ? val : of(val)))
+      );
+    };
+    return nextFn();
+  }
   // 初始化，配置路由
   async initController(module) {
     // 1.读取模块管理的controllers元数据
@@ -415,10 +471,17 @@ export class NestApplication implements MiddlewareConsumer {
 
         // 获取方法的拦截器
         const methodInterceptors =
-          Reflect.getMetadata("interceptors", Controller) ?? [];
+          Reflect.getMetadata(
+            "interceptors",
+            controllerPrototype[methodName]
+          ) ?? [];
 
         // 拦截器集合
-        const interceptors = [...controllerInterceptors, ...methodInterceptors];
+        const interceptors = [
+          ...this.globalInterceptors,
+          ...controllerInterceptors,
+          ...methodInterceptors,
+        ];
 
         //配置路由
         const routePath = path.posix.join("/", prefix, route);
@@ -462,36 +525,45 @@ export class NestApplication implements MiddlewareConsumer {
                 context,
                 host,
                 pipes
-              );
-              // 调用控制器上的方法,得到结果
-              const rest = controller[methodName](...args);
-              // 如果设置了状态码，就强制设置指定状态码
-              if (statusCode) {
-                res.status(statusCode);
-              }
-              // 判断是否要重定向
-              if (redirectUrl) {
-                if (rest && rest.url) {
-                  return res.redirect(rest.statusCode || 302, rest.url);
-                }
-                return res.redirect(redirectStatusCode, redirectUrl);
-              }
-              // 判断是否有使用Response装饰器，如果有就不处理返回
-              const responseMetadata = this.getResponseMetadata(
-                controller,
-                methodName
-              );
-              // 如果有设置响应头
-              if (headers && headers.length) {
-                headers.forEach((item) => {
-                  res.setHeader(item.key, item.value);
-                });
-              }
-              if (!responseMetadata || responseMetadata.data?.passThrough) {
-                res.send(rest);
-              }
+              ).subscribe({
+                next: (rest) => {
+                  // 如果设置了状态码，就强制设置指定状态码
+                  if (statusCode) {
+                    res.status(statusCode);
+                  }
+                  // 判断是否要重定向
+                  if (redirectUrl) {
+                    if (rest && rest.url) {
+                      return res.redirect(rest.statusCode || 302, rest.url);
+                    }
+                    return res.redirect(redirectStatusCode, redirectUrl);
+                  }
+                  // 判断是否有使用Response装饰器，如果有就不处理返回
+                  const responseMetadata = this.getResponseMetadata(
+                    controller,
+                    methodName
+                  );
+                  // 如果有设置响应头
+                  if (headers && headers.length) {
+                    headers.forEach((item) => {
+                      res.setHeader(item.key, item.value);
+                    });
+                  }
+                  if (!responseMetadata || responseMetadata.data?.passThrough) {
+                    res.send(rest);
+                  }
+                },
+                error: (error) => {
+                  this.callExceptionFilter(
+                    error,
+                    host,
+                    methodFilters,
+                    controllerFilters
+                  );
+                },
+              });
             } catch (error) {
-              this.callExceptionFilter(
+              await this.callExceptionFilter(
                 error,
                 host,
                 methodFilters,
@@ -652,54 +724,31 @@ export class NestApplication implements MiddlewareConsumer {
     }
     return pipe;
   }
-  async initGlobalFilters() {
-    // 获取当前模块上的全部provider
-    const providers = Reflect.getMetadata("providers", this.module) ?? [];
-    for (const provider of providers) {
-      if (provider.provide === APP_FILTER) {
-        const providerInstances = this.getProviderByToken(
-          provider.provide,
-          this.module
-        );
-        this.useGlobalFilters(providerInstances);
-      }
-    }
-  }
-  async initGlobalPipe() {
-    // 获取当前模块上的全部provider
-    const providers = Reflect.getMetadata("providers", this.module) ?? [];
-    for (const provider of providers) {
-      if (provider.provide === APP_PIPE) {
-        const providerInstances = this.getProviderByToken(
-          provider.provide,
-          this.module
-        );
-        this.useGlobalPipe(providerInstances);
-      }
-    }
-  }
-  initGlobalGuard() {
-    // 获取当前模块上的全部provider
-    const providers = Reflect.getMetadata("providers", this.module) ?? [];
-    for (const provider of providers) {
-      if (provider.provide === APP_GUARD) {
-        const providerInstances = this.getProviderByToken(
-          provider.provide,
-          this.module
-        );
-        this.useGlobalGuard(providerInstances);
-      }
-    }
-  }
   useGlobalGuard(...guards) {
     this.globalGuards.push(...guards);
+  }
+  private initGlobalProviders() {
+    for (const [provide, instanceMap] of this.globalProviderMap) {
+      switch (provide) {
+        case APP_FILTER:
+          this.useGlobalFilters(...instanceMap.values());
+          break;
+        case APP_PIPE:
+          this.useGlobalPipe(...instanceMap.values());
+          break;
+        case APP_GUARD:
+          this.useGlobalGuard(...instanceMap.values());
+          break;
+        case APP_INTERCEPTOR:
+          this.useGlobalInterceptors(...instanceMap.values());
+          break;
+      }
+    }
   }
   async listen(port: number) {
     await this.initProviders();
     await this.initMiddleware();
-    await this.initGlobalFilters();
-    await this.initGlobalPipe();
-    await this.initGlobalGuard();
+    await this.initGlobalProviders();
     await this.initController(this.module);
     // 调用 express 的 listen 方法启动一个服务
     this.app.listen(port, () => {
