@@ -314,6 +314,16 @@ export class NestApplication implements MiddlewareConsumer {
       }
     }
   }
+  // 拦截器处理
+  callInterceptors(
+    controller,
+    methodName,
+    args,
+    interceptors,
+    context,
+    host,
+    pipes
+  ) {}
   // 初始化，配置路由
   async initController(module) {
     // 1.读取模块管理的controllers元数据
@@ -345,6 +355,10 @@ export class NestApplication implements MiddlewareConsumer {
 
       // 获取控制器上的守卫
       const controllerGuards = Reflect.getMetadata("guards", Controller) ?? [];
+
+      // 获取控制器上的拦截器
+      const controllerInterceptors =
+        Reflect.getMetadata("interceptors", Controller) ?? [];
 
       // 3.读取控制器上被 Get,Post 等装饰器装饰的方法上的元数据
       const controllerPrototype = Controller.prototype;
@@ -399,6 +413,13 @@ export class NestApplication implements MiddlewareConsumer {
           ...methodGuards,
         ];
 
+        // 获取方法的拦截器
+        const methodInterceptors =
+          Reflect.getMetadata("interceptors", Controller) ?? [];
+
+        // 拦截器集合
+        const interceptors = [...controllerInterceptors, ...methodInterceptors];
+
         //配置路由
         const routePath = path.posix.join("/", prefix, route);
         this.app[requestMethod.toLowerCase()](
@@ -422,14 +443,23 @@ export class NestApplication implements MiddlewareConsumer {
               getHandler: () => controllerPrototype[methodName],
             };
             try {
-              // 处理参数
+              // 执行守卫验证
               await this.callGuards(guards, context);
+              // 处理参数
               const args = await this.resolveParams(
                 controller,
                 methodName,
-                req,
-                res,
-                next,
+                context,
+                host,
+                pipes
+              );
+              // 包裹拦截器处理,执行前和执行后
+              this.callInterceptors(
+                controller,
+                methodName,
+                args,
+                interceptors,
+                context,
                 host,
                 pipes
               );
@@ -550,12 +580,15 @@ export class NestApplication implements MiddlewareConsumer {
   private resolveParams(
     instance: any,
     methodName: string,
-    req: ExpressRequest,
-    res: ExpressResponse,
-    next: NextFunction,
+    context,
     host,
     pipes
   ) {
+    const { getRequest, getResponse, getNext } = context.switchToHttp();
+    const req = getRequest();
+    const res = getResponse();
+    const next = getNext();
+
     const paramsMetadata =
       Reflect.getMetadata("params", instance, methodName) || [];
     // 生序排列后根据key的类型来获取参数

@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "nodemon",
     "start": "ts-node -r tsconfig-paths/register ./src/main.ts",
-    "test": "ts-node -r tsconfig-paths/register ./tests/test.ts"
+    "test": "ts-node -r tsconfig-paths/register ./tests/test.ts",
+    "test:interceptor": "ts-node -r tsconfig-paths/register ./tests/interceptor.test.ts"
   },
   "keywords": [],
   "author": "",

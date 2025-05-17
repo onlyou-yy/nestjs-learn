@@ -18,8 +18,14 @@ import { GlobalPipe } from "./global.pipe";
 import { AccountController } from "./account.controller";
 import { AuthMiddleware } from "./auth.middleware";
 import { AuthGuard } from "./auth.guard";
+import { PayController } from "./pay.controller";
 @Module({
-  controllers: [AppController, UserController, AccountController],
+  controllers: [
+    AppController,
+    UserController,
+    AccountController,
+    PayController,
+  ],
   // 导入模块
   imports: [LoggerModule, CoreModule, DynamicConfigModule.forRoot("456")],
   providers: [

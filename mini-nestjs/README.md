@@ -297,6 +297,223 @@ const plainObject = instanceToPlain(user);
 
 守卫有单一的责任。它们根据运行时存在的某些条件（如权限、角色、ACL 等）确定给定请求是否将由路由处理程序处理。
 
+### 拦截器
+
+拦截器具有一组有用的功能，这些功能的灵感来自 面向方面编程 (**AOP**) 技术。它们可以：
+
+- 在方法执行之前/之后绑定额外的逻辑
+- 转换函数返回的结果
+- 转换函数抛出的异常
+- 扩展基本功能行为
+- 根据特定条件完全覆盖函数（例如，出于缓存目的）
+
+nestjs 实现的基本原理
+
+```ts
+function logBeforeAndAfter(target, propertyKey, descriptor) {
+  const originalMethod = descriptor.value;
+  descriptor.value = function (...args) {
+    console.log("before log");
+    const result = originalMethod.apply(this, args);
+    console.log("after log");
+    return result;
+  };
+}
+
+class Example {
+  @logBeforeAndAfter
+  someMethod() {}
+}
+```
+
+### Rxjs
+
+Rxjs 是用来处理异步事件的库,Observable 表示一个数据流,可以是同步的也可以是异步的,它可以发出多个值,它发出值可以由 Observer 进行订阅
+
+Observer 是一个对象,定义了回调函数,用于处理 Observable 发出的数据
+
+```ts
+import { Observable } from "rxjs";
+const observable = new Observable((subscriber) => {
+  subscriber.next(1);
+  subscriber.next(2);
+  subscriber.next(3);
+
+  let count = 0;
+  let timer = setInterval(() => {
+    subscriber.next(count++);
+  });
+  // 这个世自定义的取消订阅函数
+  return () => {
+    clearInterval(timer);
+    console.log("cancel subscribe");
+  };
+});
+
+// subscription 表示一个对 observable 的订阅
+// 通过 subscription 可以取消订阅，也可以组合多个订阅
+// subscription 的取消订阅函数可以是默认的也可以是自己定义的，自己定义的取消函数需要在 new Observable 是传入的回调函数中返回一个函数
+const subscription = observable.subscribe({
+  next(x) {
+    console.log("x", x);
+  },
+  error(err) {
+    console.log("err", err);
+  },
+  complete() {
+    console.log("complete");
+  },
+});
+
+// 也可以这样简写
+// observable.subscribe(console.log)
+```
+
+常用的操作符
+
+```ts
+//创建操作符 用来创建Observable
+//of ,用来创建发出特定值的Observable
+const observable = of(1, 2, 3);
+observable.subscribe(console.log);
+//from,用来将数组,promise或者迭代器转成Observable
+const observable = from([1, 2, 3]);
+observable.subscribe(console.log);
+const observable = from(Promise.resolve("ok"));
+observable.subscribe(console.log);
+//throwError, 用来创建一个立即发出错误的Observable;
+const observable = throwError(() => new Error("an error occurred"));
+observable.subscribe({
+  next: console.log,
+  error: (err) => console.log("error:", err.message),
+});
+
+// 管道操作符
+// Pipe也是一核心概念，用于将多个操作符组合在一起，形成一个管道 pipeline
+// 通过这个管道，可以对observable对象发出的数据进行转换和操作
+// tap是一个操作符，用于对Observable对象发出的值进行执行副作用操作，比如记录日志，它不会改变数据流中的值
+of(1, 2, 3)
+  .pipe(tap((value) => console.log("tap", value)))
+  .subscribe((value) => console.log("value", value));
+
+// map 用于observable发出的值进行特换
+//pipe是observable实例上的一个方法，它接受多个操作得作为参数，并返回一个新的observable
+of(1, 2, 3)
+  .pipe(map((value) => value * 2))
+  .subscribe((value) => console.log("value", value));
+
+// catchError 用于捕获 observable 中的错误，并返回一个新的 observable
+throwError(() => new Error("an error occurred"))
+  .pipe(catchError((err) => of(`catch error ${err}`)))
+  .subscribe((value) => console.log("value", value));
+
+// timeout 对 observable 增加超时限制，如果指定时间内没有发出值就会抛出错位
+// delay 暂停一段时间再发出
+of(1, 2, 3)
+  .pipe(delay(2000), timeout(1000))
+  .subscribe({
+    next: console.log,
+    error: (err) => console.log("error:", err.message),
+  });
+
+// mergeMap 用于将每个原值映射到一个新的可观察对象，然后将这些可观察对象的值合并到单一输出的可观察对象
+of(1, 2, 3)
+  .pipe(mergeMap((value) => of(value * 2)))
+  .subscribe({
+    next: console.log,
+    error: (err) => console.log("error:", err.message),
+  });
+```
+
+rxjs 的基本实现
+
+```ts
+class Observable {
+  constructor(private _subscribe) {}
+  // 订阅方法，接收一个观察者对象
+  subscribe(observer) {
+    return this._subscribe(
+      typeof observer === "function"
+        ? { next: observer, error: () => {}, complete: () => {} }
+        : observer
+    );
+  }
+  // 管道方法，接收多个操作符，并依次执行它们
+  pipe(operator) {
+    return operator(this);
+  }
+}
+
+function of(...values) {
+  return new Observable((observer) => {
+    values.forEach((value) => observer.next(value));
+    observer.complete?.();
+  });
+}
+
+function from(input) {
+  return new Observable((observer) => {
+    if (input instanceof Promise) {
+      input.then(
+        (value) => {
+          observer.next(value);
+          observer.complete?.();
+        },
+        (error) => {
+          observer.error?.(error);
+        }
+      );
+    } else {
+      for (let value of input) {
+        observer.next(value);
+      }
+      observer.complete?.();
+    }
+  });
+}
+
+function mergeMap(project) {
+  // 返回一个可接收原可观察对象的函数
+  return function (source) {
+    // 返回一个新的可观察对象
+    return new Observable((observer) => {
+      source.subscribe({
+        next: (value) => {
+          // 得到新的内部可观察对象
+          const innerObservable = project(value);
+          // 订阅内部可观察对象
+          innerObservable.subscribe({
+            next: (innerValue) => observer.next(innerValue),
+          });
+        },
+      });
+    });
+  };
+}
+
+of(1, 2, 3).subscribe({
+  next: console.log,
+  complete: () => console.log("of complete"),
+});
+
+from([1, 2, 3]).subscribe({
+  next: console.log,
+  complete: () => console.log("from arr complete"),
+});
+
+from(Promise.resolve(2)).subscribe({
+  next: console.log,
+  complete: () => console.log("from promise complete"),
+});
+
+of(1, 2, 3)
+  .pipe(mergeMap((value) => of(value * 2)))
+  .subscribe({
+    next: console.log,
+    complete: () => console.log("mergeMap complete"),
+  });
+```
+
 ## 总体流程
 
 ```
