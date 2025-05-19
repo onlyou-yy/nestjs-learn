@@ -254,21 +254,22 @@ export class NestApplication implements MiddlewareConsumer {
     const importedProviders = Reflect.getMetadata("providers", module) ?? [];
 
     // 遍历exports,从 importedProviders 中取出导出的 provider
+    for (let importedProvider of importedProviders) {
+      const providerToken = importedProvider.provide ?? importedProvider;
+      // 如果 provider 是导出的，就注册到自己和父模块上
+      if (exports.includes(providerToken)) {
+        [module, ...parentModules].forEach((module) => {
+          this.processProvider(importedProvider, module, isGlobal);
+        });
+      } else {
+        this.processProvider(importedProvider, module, isGlobal);
+      }
+    }
+    // 如果是模块那么就递归进行处理
     for (let exportToken of exports) {
       // exportToken 可以是 Module 也可能是 provider
       if (this.isModule(exportToken)) {
-        // 如果是模块那么就递归进行处理
         this.registerProvidersFromModule(exportToken, module, ...parentModules);
-      } else {
-        const provider = importedProviders.find(
-          (provider) =>
-            provider === exportToken || provider.provide === exportToken
-        );
-        if (provider) {
-          [module, ...parentModules].forEach((module) => {
-            this.addProvider(provider, module, isGlobal);
-          });
-        }
       }
     }
     this.initController(module);
