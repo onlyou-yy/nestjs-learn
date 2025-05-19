@@ -11,7 +11,7 @@ export class UploadController {
   // 并将转化后的文件保存到 req.file 上
   @UseInterceptors(FileInterceptor("file"))
   file(@UploadedFile() file: Express.Multer.File) {
-    console.log("upload...");
+    console.log("upload...", file);
     return "upload success";
   }
 }

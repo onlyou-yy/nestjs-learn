@@ -57,3 +57,5 @@ export const IP = createParamDecorator("IP");
 export const Response = createParamDecorator("Response");
 export const Res = createParamDecorator("Res");
 export const Next = createParamDecorator("Next");
+
+export const UploadedFile = createParamDecorator("UploadedFile");

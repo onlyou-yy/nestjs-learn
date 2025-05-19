@@ -353,21 +353,20 @@ export class NestApplication implements MiddlewareConsumer {
     return interceptor;
   }
   // 拦截器处理
-  callInterceptors(
-    controller,
-    methodName,
-    args,
-    interceptors,
-    context,
-    host,
-    pipes
-  ) {
+  callInterceptors(controller, methodName, interceptors, context, host, pipes) {
     const nextFn = (i = 0): Observable<any> => {
       // 2.当执行完拦截器再执行路由处理函数
       if (i >= interceptors.length) {
-        const result: any = controller[methodName](...args);
-        // 如果结果 promise （路由处理是异步的），就使用 from，否则用 of
-        return result instanceof Promise ? from(result) : of(result);
+        // 处理参数,使用rxjs消除 async await 的传递性
+        return from(
+          this.resolveParams(controller, methodName, context, host, pipes)
+        ).pipe(
+          mergeMap((args) => {
+            const result: any = controller[methodName](...args);
+            // 如果结果 promise （路由处理是异步的），就使用 from，否则用 of
+            return result instanceof Promise ? from(result) : of(result);
+          })
+        );
       }
       // 1.先执行拦截器
       const interceptor = this.getInterceptorInstance(interceptors[i]);
@@ -495,32 +494,32 @@ export class NestApplication implements MiddlewareConsumer {
             // nestjs 上下文
             const host: ArgumentsHost = {
               switchToHttp: () => ({
-                getRequest: <ExpressRequest>() => req as ExpressRequest,
-                getResponse: <ExpressResponse>() => res as ExpressResponse,
-                getNext: <NextFunction>() => next as NextFunction,
+                getRequest: <T>() => req as T,
+                getResponse: <T>() => res as T,
+                getNext: <T>() => next as T,
               }),
             };
             const context: ExecutionContext = {
               ...host,
-              getClass: <ClassConstructor>() => Controller as ClassConstructor,
+              getClass: <T>() => Controller as T,
               getHandler: () => controllerPrototype[methodName],
             };
             try {
               // 执行守卫验证
               await this.callGuards(guards, context);
               // 处理参数
-              const args = await this.resolveParams(
-                controller,
-                methodName,
-                context,
-                host,
-                pipes
-              );
+              // const args = await this.resolveParams(
+              //   controller,
+              //   methodName,
+              //   context,
+              //   host,
+              //   pipes
+              // );
+              // 应该先执行拦截器，在处理路由函数之前处理参数，这样才能拿到拦截器附加的数据
               // 包裹拦截器处理,执行前和执行后
               this.callInterceptors(
                 controller,
                 methodName,
-                args,
                 interceptors,
                 context,
                 host,
@@ -697,6 +696,9 @@ export class NestApplication implements MiddlewareConsumer {
             break;
           case "Next":
             value = next;
+            break;
+          case "UploadedFile":
+            value = req.file;
             break;
           case DECORATOR_FACTORY:
             value = factory(data, host);
