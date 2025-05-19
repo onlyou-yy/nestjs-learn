@@ -137,8 +137,38 @@ Content-Disposition: form-data; name="text"
 
 title
 ------WebKitFormBoundary7MA4YWxkTrZu0gW
-Content-Disposition: form-data; name="file"; filename="1.jpg"
-Content-Type: image/jpg
+Content-Disposition: form-data; name="file"; filename="1.png"
+Content-Type: image/png
 
-< ./images/1.jpg
+< ./images/1.png
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+### 测试文件上传大小限制管道
+POST http://localhost:3000/upload/max1MB
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="text"
+
+title
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="file"; filename="2mb.png"
+Content-Type: image/png
+
+< ./images/2mb.png
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+### 测试文件上传 parseFile 文件验证
+POST http://localhost:3000/upload/parse
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="text"
+
+title
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="file"; filename="1.png"
+Content-Type: image/png
+
+< ./images/1.png
 ------WebKitFormBoundary7MA4YWxkTrZu0gW--

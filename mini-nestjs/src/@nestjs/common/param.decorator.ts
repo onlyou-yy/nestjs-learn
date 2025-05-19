@@ -8,6 +8,12 @@ export const createParamDecorator = (keyOrFactory: string | Function) => {
   // parameterIndex 是参数的索引
   return (data?: any, ...pipes: any[]) =>
     (target: any, propertyKey: string, parameterIndex: number) => {
+      // 如果第一个参数不是string 那么它就是管道
+      if (data && typeof data !== "string") {
+        pipes = [data, ...pipes];
+        data = null;
+      }
+
       //给控制器类型的原型的propertyKey方法定义元数据
       //属性名是params 值是一个数组，数组里应该放置数据，表示那个位置使用哪个装饰器
 
